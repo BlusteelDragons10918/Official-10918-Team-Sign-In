@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Student Directory · Bluesteel Dragons</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav class="nav">
+    <div class="nav-brand">
+        <span class="nav-icon">⬡</span>
+        <span>Bluesteel Dragons</span>
+    </div>
+    <div class="nav-links">
+        <a href="index.html" class="nav-link">Scanner</a>
+        <a href="students.html" class="nav-link active">Directory</a>
+        <a href="admin.html" class="nav-link nav-admin">Admin ↗</a>
+    </div>
+</nav>
+
+<div class="page-wrap">
+
+    <h1 class="page-title">Student Directory</h1>
+
+    <input id="searchBox" class="search-input" placeholder="Search by name or ID…" />
+
+    <div id="studentList" class="student-grid">
+        <div class="empty" style="grid-column:1/-1;">Loading students…</div>
+    </div>
+
+</div>
+
+<script type="module" src="students.js"></script>
+</body>
+</html>
