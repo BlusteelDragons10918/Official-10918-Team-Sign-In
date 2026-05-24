@@ -85,12 +85,12 @@ async function endMeeting(endTime, autoCheckoutTime = null) {
         active: false
     });
 
-    // Auto sign out everyone still checked in
-    const openSessions = await getDocs(
-        query(collection(db, "sessions"),
-              where("meetingId", "==", meetId),
-              where("status", "==", "active"))
+    // Auto sign out everyone still checked in.
+    // Query on status only (no composite index needed), filter meetingId client-side.
+    const allActiveSessions = await getDocs(
+        query(collection(db, "sessions"), where("status", "==", "active"))
     );
+    const openSessions = { docs: allActiveSessions.docs.filter(d => d.data().meetingId === meetId) };
 
     const checkoutTs = autoCheckoutTime || endTime;
 
@@ -219,14 +219,21 @@ async function handleScan(id) {
             return;
         }
 
-        // Look for open session this meeting
+        // Look for open session this meeting.
+        // Query only on userId to avoid requiring a composite index —
+        // then filter meetingId client-side. This is safe because one
+        // user will never have more than a handful of sessions total.
         const snap = await getDocs(query(
             collection(db, "sessions"),
-            where("userId",    "==", user.firestoreId),
-            where("meetingId", "==", currentMeetingDocId)
+            where("userId", "==", user.firestoreId)
         ));
         let activeSession = null;
-        snap.forEach(d => { if (!d.data().checkOutTime) activeSession = { id: d.id, ...d.data() }; });
+        snap.forEach(d => {
+            const s = d.data();
+            if (s.meetingId === currentMeetingDocId && !s.checkOutTime) {
+                activeSession = { id: d.id, ...s };
+            }
+        });
 
         if (!activeSession) {
             await checkIn(user);
@@ -262,27 +269,20 @@ async function checkIn(user) {
 }
 
 // ===================== CHECKOUT FLOW =====================
-// checkInTime passed so we can decide whether to show emergency leave
 function startCheckoutFlow(sessionId, user, checkInTime) {
-    pendingCheckoutSessionId = sessionId;
-    pendingCheckoutUserId    = user.firestoreId;
-
     const name = user.name || user.firestoreId;
-
-    // Show emergency leave only within first 30 min of MEETING start (not check-in)
     const meetingStartTs = currentMeetingStart || checkInTime;
     const minsSinceMeetingStart = (Date.now() - meetingStartTs) / 60000;
-    const showEmergency = minsSinceMeetingStart <= 30;
 
-    if (showEmergency) {
-        showMessage(`Early leave? Choose reason or cancel to stay.`, "warn");
-        updateLiveBox(`🔄 Checking out: <b>${name}</b>`);
-        const box = document.getElementById("emergencyBox");
-        box.classList.remove("hidden");
-        // Make sure normal checkout button is visible too
-        document.getElementById("normalCheckoutBtn").classList.remove("hidden");
+    if (minsSinceMeetingStart <= 30) {
+        // Within first 30 min — emergency leave modal required
+        pendingCheckoutSessionId = sessionId;
+        pendingCheckoutUserId    = user.firestoreId;
+        showMessage(`Early leave? Select a reason below.`, "warn");
+        updateLiveBox(`🔄 Early checkout: <b>${name}</b>`);
+        document.getElementById("emergencyBox").classList.remove("hidden");
     } else {
-        // Past 30 min — normal checkout immediately, no popup
+        // Past 30 min — silent normal checkout, no modal
         completeNormalCheckout(sessionId, user);
     }
 }
@@ -295,32 +295,10 @@ async function completeNormalCheckout(sessionId, user) {
     });
     pendingCheckoutSessionId = null;
     pendingCheckoutUserId    = null;
-    document.getElementById("emergencyBox").classList.add("hidden");
     const name = user.name || user.firestoreId;
     showMessage(`✓ Checked out: ${name}`, "success");
     updateLiveBox(`⚫ <b>${name}</b> checked out`);
 }
-
-// Normal checkout button inside the emergency modal
-document.getElementById("normalCheckoutBtn").onclick = async () => {
-    if (!pendingCheckoutSessionId) return;
-    // Need to look up the user object — reconstruct minimal version
-    const allSessions = await getDocs(
-        query(collection(db, "sessions"), where("__name__", "in", [pendingCheckoutSessionId]))
-    );
-    // Simpler: just do the update directly
-    await updateDoc(doc(db, "sessions", pendingCheckoutSessionId), {
-        checkOutTime: Date.now(),
-        earlyLeave:   false,
-        status:       "completed"
-    });
-    pendingCheckoutSessionId = null;
-    pendingCheckoutUserId    = null;
-    document.getElementById("emergencyBox").classList.add("hidden");
-    document.getElementById("leaveReason").value = "";
-    document.getElementById("otherReason").value = "";
-    showMessage("✓ Checked out", "success");
-};
 
 // ===================== EMERGENCY LEAVE =====================
 document.getElementById("confirmEarlyLeaveBtn").onclick = async () => {
