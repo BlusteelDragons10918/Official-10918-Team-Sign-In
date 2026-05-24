@@ -1,7 +1,7 @@
 import { db } from "./firebase.js";
 import {
     collection, query, where, onSnapshot,
-    updateDoc, getDocs, addDoc, doc, orderBy, getDoc
+    updateDoc, getDocs, addDoc, doc, getDoc
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { auth } from "./firebase.js";
 import {
@@ -83,10 +83,11 @@ function listenMeeting() {
 //  LIVE SESSIONS  (only currently signed-in people)
 // ============================================================
 function listenLiveSessions() {
+    // Single-field query only — no composite index needed.
+    // Sort client-side after receiving results.
     const q = query(
         collection(db, "sessions"),
-        where("status", "==", "active"),
-        orderBy("checkInTime", "desc")
+        where("status", "==", "active")
     );
 
     onSnapshot(q, snap => {
@@ -99,7 +100,10 @@ function listenLiveSessions() {
             return;
         }
 
-        snap.forEach(d => {
+        // Sort newest check-in first client-side
+        const docs = [...snap.docs].sort((a, b) => b.data().checkInTime - a.data().checkInTime);
+
+        docs.forEach(d => {
             const s = d.data();
             const { name, id } = resolveDisplay(s);
             const elapsed = Math.round((Date.now() - s.checkInTime) / 60000);
@@ -213,14 +217,12 @@ async function loadMeetingHistory() {
     const container = document.getElementById("meetingHistory");
 
     onSnapshot(
-        query(collection(db, "meetings"), orderBy("startTime", "desc")),
+        collection(db, "meetings"),
         async snap => {
             container.innerHTML = "";
             if (snap.empty) { container.innerHTML = '<div class="empty">No meetings recorded</div>'; return; }
 
-            const allSessionsSnap = await getDocs(
-                query(collection(db, "sessions"), orderBy("checkInTime", "asc"))
-            );
+            const allSessionsSnap = await getDocs(collection(db, "sessions"));
             const sessionsByMeeting = {};
             allSessionsSnap.forEach(d => {
                 const s = d.data();
@@ -228,7 +230,10 @@ async function loadMeetingHistory() {
                 sessionsByMeeting[s.meetingId].push({ id: d.id, ...s });
             });
 
-            snap.forEach(d => {
+            // Sort meetings newest-first client-side
+            const meetingDocs = [...snap.docs].sort((a, b) => b.data().startTime - a.data().startTime);
+
+            meetingDocs.forEach(d => {
                 const meeting   = d.data();
                 const mid       = d.id;
                 const sessions  = sessionsByMeeting[mid] || [];
