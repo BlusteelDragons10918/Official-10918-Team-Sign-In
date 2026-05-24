@@ -13,7 +13,7 @@ jobs:
 
       - name: Recreate firebase.js from Secret
         run: |
-          echo "${{ secrets.FIREBASE_CONFIG_JS }}" > firebase.js
+          echo "${{ secrets.FIREBASE_CONFIG_JS }}" > ./firebase.js
 
       - name: Deploy to GitHub Pages
         uses: JamesIves/github-pages-deploy-action@v4
