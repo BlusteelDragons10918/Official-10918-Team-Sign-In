@@ -1,0 +1,22 @@
+name: Deploy Plain HTML/CSS/JS Site
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Recreate firebase.js from Secret
+        run: |
+          echo "${{ secrets.FIREBASE_CONFIG_JS }}" > firebase.js
+
+      - name: Deploy to GitHub Pages
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          folder: . # Deploys the entire root directory
+          branch: gh-pages
