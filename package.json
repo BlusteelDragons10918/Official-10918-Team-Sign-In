@@ -1,0 +1,7 @@
+{
+  "name": "official-robotics-sign-in",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "sed -i \"s|__FIREBASE_API_KEY__|${FIREBASE_API_KEY}|g\" firebase.js && sed -i \"s|__FIREBASE_AUTH_DOMAIN__|${FIREBASE_AUTH_DOMAIN}|g\" firebase.js && sed -i \"s|__FIREBASE_PROJECT_ID__|${FIREBASE_PROJECT_ID}|g\" firebase.js && sed -i \"s|__FIREBASE_STORAGE_BUCKET__|${FIREBASE_STORAGE_BUCKET}|g\" firebase.js && sed -i \"s|__FIREBASE_MESSAGING_SENDER_ID__|${FIREBASE_MESSAGING_SENDER_ID}|g\" firebase.js && sed -i \"s|__FIREBASE_APP_ID__|${FIREBASE_APP_ID}|g\" firebase.js && sed -i \"s|__FIREBASE_MEASUREMENT_ID__|${FIREBASE_MEASUREMENT_ID}|g\" firebase.js"
+  }
+}
