@@ -73,18 +73,25 @@
         <h2>Leaving Early?</h2>
         <p>Scan again to do a normal checkout, or select a reason below for an emergency leave.</p>
 
-        <select id="leaveReason" class="select">
-            <option value="">Select reason…</option>
-            <option value="Illness">Illness</option>
-            <option value="Family">Family Emergency</option>
-            <option value="Other">Other</option>
-        </select>
+        <div style="font-family:var(--font-mono);font-size:0.75rem;color:var(--text3);padding:0.5rem 0;">
+            Only available within first 30 minutes of meeting start.
+        </div>
+
+        <div class="select-wrapper">
+            <select id="leaveReason" class="select">
+                <option value="">Select reason…</option>
+                <option value="Illness">Illness</option>
+                <option value="Family">Family Emergency</option>
+                <option value="Other">Other</option>
+            </select>
+        </div>
 
         <input id="otherReason" class="input" placeholder="If other, explain…" />
 
         <div class="modal-actions">
+            <button id="normalCheckoutBtn" class="btn primary">Normal Checkout</button>
             <button id="confirmEarlyLeaveBtn" class="btn danger">Submit Emergency Leave</button>
-            <button id="cancelEarlyLeaveBtn" class="btn ghost">Cancel</button>
+            <button id="cancelEarlyLeaveBtn" class="btn ghost">Cancel / Stay</button>
         </div>
     </div>
 </div>

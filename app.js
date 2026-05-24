@@ -6,51 +6,51 @@ import {
     query,
     where,
     updateDoc,
-    doc
+    doc,
+    orderBy
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-let currentMeetingDocId = null;
-let currentMeetingLabel = null;
+let currentMeetingDocId  = null;
+let currentMeetingLabel  = null;
+let currentMeetingStart  = null; // timestamp — used for early-leave 30-min window
 
 let pendingCheckoutSessionId = null;
-let pendingCheckoutUserId = null;
+let pendingCheckoutUserId    = null;
 
 let isProcessingScan = false;
-let scanTimeout = null;
+let scanTimeout      = null;
 
+// ===================== UI HELPERS =====================
 function showMessage(msg, type = "info") {
     const el = document.getElementById("message");
     el.innerText = msg;
-    el.style.borderLeftColor = type === "error" ? "var(--red)" :
-                               type === "success" ? "var(--green)" :
-                               type === "warn" ? "var(--orange)" :
-                               "var(--cyan)";
-    el.style.color = type === "error" ? "var(--red)" :
-                     type === "success" ? "var(--green)" :
-                     type === "warn" ? "var(--orange)" :
-                     "var(--cyan)";
+    const colors = { error: "var(--red)", success: "var(--green)", warn: "var(--orange)", info: "var(--cyan)" };
+    el.style.borderLeftColor = colors[type] || colors.info;
+    el.style.color           = colors[type] || colors.info;
 }
 
 function setMeetingDot(active) {
     const dot = document.getElementById("meetingDot");
-    if (active) dot.classList.add("active");
-    else dot.classList.remove("active");
+    dot.classList.toggle("active", active);
 }
 
-//  MEETING 
-document.getElementById("startMeetingBtn").onclick = async () => {
-    if (currentMeetingDocId) {
-        showMessage("Meeting already active", "warn");
-        return;
-    }
+function updateLiveBox(html) {
+    document.getElementById("liveBox").innerHTML =
+        `<div style="color:var(--text2);font-size:0.85rem;">${html}</div>`;
+}
 
-    const today = new Date().toISOString().split("T")[0];
-    const snapshot = await getDocs(collection(db, "meetings"));
+// ===================== MEETING =====================
+document.getElementById("startMeetingBtn").onclick = async () => {
+    if (currentMeetingDocId) { showMessage("Meeting already active", "warn"); return; }
+
+    const today         = new Date().toISOString().split("T")[0];
+    const snapshot      = await getDocs(collection(db, "meetings"));
     const meetingNumber = snapshot.size + 1;
-    const meetingLabel = `Meeting ${meetingNumber} (${today})`;
+    const meetingLabel  = `Meeting ${meetingNumber} (${today})`;
+    const startTime     = Date.now();
 
     const ref = await addDoc(collection(db, "meetings"), {
-        startTime: Date.now(),
+        startTime,
         endTime: null,
         active: true,
         meetingNumber,
@@ -60,91 +60,117 @@ document.getElementById("startMeetingBtn").onclick = async () => {
 
     currentMeetingDocId = ref.id;
     currentMeetingLabel = meetingLabel;
+    currentMeetingStart = startTime;
 
     document.getElementById("meetingStatus").innerText = meetingLabel;
     setMeetingDot(true);
     showMessage("Started " + meetingLabel, "success");
+
+    // Schedule auto-end at midnight (or 8 PM if past midnight check)
+    scheduleMidnightAutoEnd();
 };
 
 document.getElementById("endMeetingBtn").onclick = async () => {
-    if (!currentMeetingDocId) {
-        showMessage("No active meeting", "error");
-        return;
-    }
+    if (!currentMeetingDocId) { showMessage("No active meeting", "error"); return; }
+    await endMeeting(Date.now());
+};
 
-    await updateDoc(doc(db, "meetings", currentMeetingDocId), {
-        endTime: Date.now(),
+// Shared end-meeting logic — also used by auto-end
+// autoCheckoutTime: if set, sign out all still-active sessions at this timestamp
+async function endMeeting(endTime, autoCheckoutTime = null) {
+    const meetId = currentMeetingDocId;
+
+    await updateDoc(doc(db, "meetings", meetId), {
+        endTime,
         active: false
     });
 
+    // Auto sign out everyone still checked in
+    const openSessions = await getDocs(
+        query(collection(db, "sessions"),
+              where("meetingId", "==", meetId),
+              where("status", "==", "active"))
+    );
+
+    const checkoutTs = autoCheckoutTime || endTime;
+
+    for (const d of openSessions.docs) {
+        await updateDoc(doc(db, "sessions", d.id), {
+            checkOutTime: checkoutTs,
+            status: "completed",
+            autoSignedOut: true,   // flag for directory display
+            note: "Auto-signed out when meeting ended"
+        });
+    }
+
     currentMeetingDocId = null;
     currentMeetingLabel = null;
+    currentMeetingStart = null;
 
     document.getElementById("meetingStatus").innerText = "No active meeting";
     setMeetingDot(false);
-    showMessage("Meeting ended");
-};
+    showMessage("Meeting ended — all active sessions closed", "success");
+}
 
-//  SCANNING 
+// ===================== AUTO MIDNIGHT END =====================
+let midnightTimer = null;
+
+function scheduleMidnightAutoEnd() {
+    clearTimeout(midnightTimer);
+    if (!currentMeetingDocId) return;
+
+    const now       = new Date();
+    // Midnight tonight
+    const midnight  = new Date(now);
+    midnight.setHours(24, 0, 0, 0);
+    const msToMidnight = midnight.getTime() - Date.now();
+
+    midnightTimer = setTimeout(async () => {
+        if (!currentMeetingDocId) return;
+        // Cap checkout time at 8 PM of the meeting's start day
+        const meetingDate = new Date(currentMeetingStart);
+        const eightPm     = new Date(meetingDate);
+        eightPm.setHours(20, 0, 0, 0);
+        // If 8 PM is in the past relative to start, use start + a bit; else use 8 PM
+        const autoCheckout = eightPm.getTime() > currentMeetingStart
+            ? eightPm.getTime()
+            : currentMeetingStart + 3 * 60 * 60 * 1000; // fallback: start + 3h
+        await endMeeting(midnight.getTime(), autoCheckout);
+    }, msToMidnight);
+}
+
+// ===================== SCAN DETECTION =====================
 const scanInput = document.getElementById("scanInput");
-
-const SCAN_SPEED_THRESHOLD = 50; 
+const modeHint  = document.getElementById("scanModeHint");
+const SCAN_SPEED_THRESHOLD = 50;
 let keystrokeTimes = [];
-let inputMode = "unknown"; // "scan" | "type"
-
-// Show the current mode as a hint below the input
-const modeHint = document.getElementById("scanModeHint");
 
 function updateModeHint(mode) {
     if (!modeHint) return;
-    if (mode === "scan") {
-        modeHint.textContent = "⚡ Scanner detected — auto-submitting";
-        modeHint.style.color = "var(--cyan)";
-    } else if (mode === "type") {
-        modeHint.textContent = "⌨ Manual entry — press Enter to submit";
-        modeHint.style.color = "var(--text2)";
-    } else {
-        modeHint.textContent = "Scan or type student ID";
-        modeHint.style.color = "var(--text3)";
-    }
+    if (mode === "scan")  { modeHint.textContent = "⚡ Scanner detected — auto-submitting"; modeHint.style.color = "var(--cyan)"; }
+    else if (mode === "type") { modeHint.textContent = "⌨ Manual entry — press Enter to submit"; modeHint.style.color = "var(--text2)"; }
+    else { modeHint.textContent = "Scan card or type school ID"; modeHint.style.color = "var(--text3)"; }
 }
 
-scanInput.addEventListener("keydown", () => {
+scanInput.addEventListener("keydown", (e) => {
     keystrokeTimes.push(Date.now());
-    // Only keep last 5 keystrokes for averaging
     if (keystrokeTimes.length > 6) keystrokeTimes.shift();
+    if (e.key === "Enter") { clearTimeout(scanTimeout); submitId(); }
 });
 
 scanInput.addEventListener("input", () => {
     clearTimeout(scanTimeout);
-
-    // Calculate average gap between recent keystrokes
     let avgGap = Infinity;
     if (keystrokeTimes.length >= 2) {
         const gaps = [];
-        for (let i = 1; i < keystrokeTimes.length; i++) {
-            gaps.push(keystrokeTimes[i] - keystrokeTimes[i - 1]);
-        }
-        avgGap = gaps.reduce((a, b) => a + b, 0) / gaps.length;
+        for (let i = 1; i < keystrokeTimes.length; i++) gaps.push(keystrokeTimes[i] - keystrokeTimes[i-1]);
+        avgGap = gaps.reduce((a,b) => a+b, 0) / gaps.length;
     }
-
     if (avgGap < SCAN_SPEED_THRESHOLD) {
-        inputMode = "scan";
         updateModeHint("scan");
-        // Auto-submit shortly after scanner finishes sending characters
         scanTimeout = setTimeout(() => submitId(), 120);
     } else {
-        inputMode = "type";
         updateModeHint("type");
-        // Don't auto-submit for typing — wait for Enter
-    }
-});
-
-// Enter key always submits
-scanInput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
-        clearTimeout(scanTimeout);
-        submitId();
     }
 });
 
@@ -153,60 +179,37 @@ async function submitId() {
     scanInput.value = "";
     scanInput.focus();
     keystrokeTimes = [];
-    inputMode = "unknown";
     updateModeHint("unknown");
-
     if (!id) return;
-
-    if (!currentMeetingDocId) {
-        showMessage("No active meeting — start one first", "error");
-        return;
-    }
-
+    if (!currentMeetingDocId) { showMessage("No active meeting — start one first", "error"); return; }
     await handleScan(id);
 }
 
-//  FIND USER 
+// ===================== FIND USER =====================
 async function findUser(id) {
     const snap = await getDocs(collection(db, "users"));
     let user = null;
-    const normalizedId = id.trim().toString();
-
-    snap.forEach(docu => {
-        const data = docu.data();
-
-        // Match against cardId or schoolId (new schema)
-        const matchCard   = (data.cardId   || "").toString().trim() === normalizedId;
-        const matchSchool = (data.schoolId || "").toString().trim() === normalizedId;
-
-        // Backward compat with old identifiers[] array
-        const identifiers = data.identifiers || [];
-        const matchLegacy = identifiers.some(i =>
-            (i.value || "").toString().trim() === normalizedId
-        );
-
-        if (matchCard || matchSchool || matchLegacy) {
-            user = { firestoreId: docu.id, ...data };
+    const nid = id.trim().toString();
+    snap.forEach(d => {
+        const data = d.data();
+        if ((data.cardId   || "").toString().trim() === nid ||
+            (data.schoolId || "").toString().trim() === nid ||
+            (data.identifiers || []).some(i => (i.value || "").toString().trim() === nid)) {
+            user = { firestoreId: d.id, ...data };
         }
     });
-
     return user;
 }
 
-//  SCAN LOGIC 
+// ===================== SCAN LOGIC =====================
 async function handleScan(id) {
     if (isProcessingScan) return;
     isProcessingScan = true;
-
     try {
         const user = await findUser(id);
+        if (!user) { showMessage(`No student found for ID: ${id}`, "error"); updateLiveBox(`❌ Unknown ID: ${id}`); return; }
 
-        if (!user) {
-            showMessage(`No student found for ID: ${id}`, "error");
-            updateLiveBox(`❌ Unknown ID: ${id}`);
-            return;
-        }
-
+        // If there's a pending checkout, complete it if same user
         if (pendingCheckoutSessionId) {
             if (pendingCheckoutUserId === user.firestoreId) {
                 await completeNormalCheckout(pendingCheckoutSessionId, user);
@@ -216,53 +219,41 @@ async function handleScan(id) {
             return;
         }
 
-        const q = query(
+        // Look for open session this meeting
+        const snap = await getDocs(query(
             collection(db, "sessions"),
-            where("userId", "==", user.firestoreId),
+            where("userId",    "==", user.firestoreId),
             where("meetingId", "==", currentMeetingDocId)
-        );
-
-        const snap = await getDocs(q);
+        ));
         let activeSession = null;
-
-        snap.forEach(d => {
-            const s = d.data();
-            if (!s.checkOutTime) activeSession = { id: d.id, ...s };
-        });
+        snap.forEach(d => { if (!d.data().checkOutTime) activeSession = { id: d.id, ...d.data() }; });
 
         if (!activeSession) {
             await checkIn(user);
         } else {
-            startCheckoutFlow(activeSession.id, user);
+            startCheckoutFlow(activeSession.id, user, activeSession.checkInTime);
         }
-
     } finally {
         isProcessingScan = false;
     }
 }
 
-function updateLiveBox(html) {
-    const box = document.getElementById("liveBox");
-    box.innerHTML = `<div style="color:var(--text2);font-size:0.85rem;">${html}</div>`;
-}
-
-//  CHECK IN 
+// ===================== CHECK IN =====================
 async function checkIn(user) {
-    const displayName = user.name || user.cardId || user.schoolId || user.firestoreId;
-    // Prefer schoolId as the human-readable display ID, fall back to cardId
-    const displayId = user.schoolId || user.cardId
-        || user.identifiers?.[0]?.value || user.firestoreId;
+    const displayName = user.name || user.firestoreId;
+    const displayId   = user.schoolId || user.cardId || user.identifiers?.[0]?.value || user.firestoreId;
 
     await addDoc(collection(db, "sessions"), {
-        userId: user.firestoreId,
+        userId:       user.firestoreId,
         displayId,
-        displayName: user.name || "",
-        meetingId: currentMeetingDocId,
+        displayName:  user.name || "",
+        meetingId:    currentMeetingDocId,
         meetingLabel: currentMeetingLabel,
-        checkInTime: Date.now(),
+        checkInTime:  Date.now(),
         checkOutTime: null,
-        earlyLeave: false,
+        earlyLeave:   false,
         earlyLeaveReason: null,
+        autoSignedOut: false,
         status: "active"
     });
 
@@ -270,69 +261,101 @@ async function checkIn(user) {
     updateLiveBox(`🟢 <b>${displayName}</b> checked in<br><span style="color:var(--text3)">${currentMeetingLabel}</span>`);
 }
 
-//  CHECKOUT FLOW 
-function startCheckoutFlow(sessionId, user) {
+// ===================== CHECKOUT FLOW =====================
+// checkInTime passed so we can decide whether to show emergency leave
+function startCheckoutFlow(sessionId, user, checkInTime) {
     pendingCheckoutSessionId = sessionId;
-    pendingCheckoutUserId = user.firestoreId;
+    pendingCheckoutUserId    = user.firestoreId;
 
-    const name = user.name || user.identifiers?.[0]?.value || user.firestoreId;
-    showMessage(`Scan again to checkout: ${name}`, "warn");
-    updateLiveBox(`🔄 Checking out: <b>${name}</b>`);
-    document.getElementById("emergencyBox").classList.remove("hidden");
+    const name = user.name || user.firestoreId;
+
+    // Show emergency leave only within first 30 min of MEETING start (not check-in)
+    const meetingStartTs = currentMeetingStart || checkInTime;
+    const minsSinceMeetingStart = (Date.now() - meetingStartTs) / 60000;
+    const showEmergency = minsSinceMeetingStart <= 30;
+
+    if (showEmergency) {
+        showMessage(`Early leave? Choose reason or cancel to stay.`, "warn");
+        updateLiveBox(`🔄 Checking out: <b>${name}</b>`);
+        const box = document.getElementById("emergencyBox");
+        box.classList.remove("hidden");
+        // Make sure normal checkout button is visible too
+        document.getElementById("normalCheckoutBtn").classList.remove("hidden");
+    } else {
+        // Past 30 min — normal checkout immediately, no popup
+        completeNormalCheckout(sessionId, user);
+    }
 }
 
 async function completeNormalCheckout(sessionId, user) {
     await updateDoc(doc(db, "sessions", sessionId), {
         checkOutTime: Date.now(),
-        earlyLeave: false,
-        status: "completed"
+        earlyLeave:   false,
+        status:       "completed"
     });
-
     pendingCheckoutSessionId = null;
-    pendingCheckoutUserId = null;
-
-    const name = user.name || user.identifiers?.[0]?.value || user.firestoreId;
+    pendingCheckoutUserId    = null;
     document.getElementById("emergencyBox").classList.add("hidden");
+    const name = user.name || user.firestoreId;
     showMessage(`✓ Checked out: ${name}`, "success");
     updateLiveBox(`⚫ <b>${name}</b> checked out`);
 }
 
-//  EMERGENCY LEAVE 
+// Normal checkout button inside the emergency modal
+document.getElementById("normalCheckoutBtn").onclick = async () => {
+    if (!pendingCheckoutSessionId) return;
+    // Need to look up the user object — reconstruct minimal version
+    const allSessions = await getDocs(
+        query(collection(db, "sessions"), where("__name__", "in", [pendingCheckoutSessionId]))
+    );
+    // Simpler: just do the update directly
+    await updateDoc(doc(db, "sessions", pendingCheckoutSessionId), {
+        checkOutTime: Date.now(),
+        earlyLeave:   false,
+        status:       "completed"
+    });
+    pendingCheckoutSessionId = null;
+    pendingCheckoutUserId    = null;
+    document.getElementById("emergencyBox").classList.add("hidden");
+    document.getElementById("leaveReason").value = "";
+    document.getElementById("otherReason").value = "";
+    showMessage("✓ Checked out", "success");
+};
+
+// ===================== EMERGENCY LEAVE =====================
 document.getElementById("confirmEarlyLeaveBtn").onclick = async () => {
     const reason = document.getElementById("leaveReason").value;
-    const other = document.getElementById("otherReason").value;
-
+    const other  = document.getElementById("otherReason").value;
     if (!pendingCheckoutSessionId) return;
     if (!reason) { showMessage("Select a reason first", "error"); return; }
 
     const finalReason = reason === "Other" ? (other || "Other") : reason;
 
     await updateDoc(doc(db, "sessions", pendingCheckoutSessionId), {
-        checkOutTime: Date.now(),
-        earlyLeave: true,
+        checkOutTime:     Date.now(),
+        earlyLeave:       true,
         earlyLeaveReason: finalReason,
-        status: "pending_admin_review"
+        hoursVoided:      false,   // set to true if admin rejects
+        status:           "pending_admin_review"
     });
 
     pendingCheckoutSessionId = null;
-    pendingCheckoutUserId = null;
-
+    pendingCheckoutUserId    = null;
     document.getElementById("emergencyBox").classList.add("hidden");
     document.getElementById("leaveReason").value = "";
     document.getElementById("otherReason").value = "";
-
     showMessage("Emergency leave submitted — pending admin review", "warn");
     updateLiveBox(`🚨 Emergency leave submitted`);
 };
 
 document.getElementById("cancelEarlyLeaveBtn").onclick = () => {
     pendingCheckoutSessionId = null;
-    pendingCheckoutUserId = null;
+    pendingCheckoutUserId    = null;
     document.getElementById("emergencyBox").classList.add("hidden");
     showMessage("Checkout cancelled");
 };
 
-//  RESTORE MEETING 
+// ===================== RESTORE MEETING =====================
 async function restoreActiveMeeting() {
     const snap = await getDocs(collection(db, "meetings"));
     snap.forEach(d => {
@@ -340,15 +363,13 @@ async function restoreActiveMeeting() {
         if (data.active) {
             currentMeetingDocId = d.id;
             currentMeetingLabel = data.meetingLabel;
+            currentMeetingStart = data.startTime;
             document.getElementById("meetingStatus").innerText = data.meetingLabel;
             setMeetingDot(true);
+            scheduleMidnightAutoEnd();
         }
     });
 }
 
 restoreActiveMeeting();
-
-// Auto-focus scanner
-window.addEventListener("load", () => {
-    document.getElementById("scanInput").focus();
-});
+window.addEventListener("load", () => document.getElementById("scanInput").focus());
