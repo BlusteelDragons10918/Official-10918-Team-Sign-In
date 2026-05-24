@@ -267,9 +267,12 @@ async function loadMeetingHistory() {
                 const meetingDocId = d.id;
                 const sessions = sessionsByMeeting[meetingDocId] || [];
 
+                // --- NEW DURATION CALCULATION ---
+                // Uses the meeting's own timestamps instead of summing attendee sessions
                 const endTime = meeting.endTime || Date.now();
                 const durationMs = endTime - meeting.startTime;
                 const durationHrs = (durationMs / 3600000).toFixed(1);
+                // --------------------------------
 
                 const accordion = document.createElement("div");
                 accordion.className = "accordion";
@@ -281,27 +284,27 @@ async function loadMeetingHistory() {
                 const startDate = new Date(meeting.startTime).toLocaleDateString("en-US", {
                     weekday: "short", month: "short", day: "numeric"
                 });
-                const startTime = new Date(meeting.startTime).toLocaleTimeString("en-US", {
+                const startTimeStr = new Date(meeting.startTime).toLocaleTimeString("en-US", {
                     hour: "2-digit", minute: "2-digit"
                 });
 
                 accordion.innerHTML = `
-                    <button class="accordion-header" onclick="toggleAccordion('${meetingDocId}')">
-                        <div class="accordion-left">
-                            <span class="accordion-title">${meeting.meetingLabel || "Meeting"}</span>
-                            <span class="accordion-sub">${startDate} · ${startTime}</span>
-                        </div>
-                        <div class="accordion-right">
-                            ${statusDot}
-                            <span class="accordion-meta">${sessions.length} attendees</span>
-                            <span class="accordion-meta">${(totalMinutes / 60).toFixed(1)} hrs total</span>
-                            <span class="accordion-chevron" id="chev-${meetingDocId}">▸</span>
-                        </div>
-                    </button>
-                    <div class="accordion-body hidden" id="body-${meetingDocId}">
-                        ${renderMeetingBody(sessions, meetingDocId)}
-                    </div>
-                `;
+        <button class="accordion-header" onclick="toggleAccordion('${meetingDocId}')">
+            <div class="accordion-left">
+                <span class="accordion-title">${meeting.meetingLabel || "Meeting"}</span>
+                <span class="accordion-sub">${startDate} · ${startTimeStr}</span>
+            </div>
+            <div class="accordion-right">
+                ${statusDot}
+                <span class="accordion-meta">${sessions.length} attendees</span>
+                <span class="accordion-meta">${durationHrs} hrs total</span>
+                <span class="accordion-chevron" id="chev-${meetingDocId}">▸</span>
+            </div>
+        </button>
+        <div class="accordion-body hidden" id="body-${meetingDocId}">
+            ${renderMeetingBody(sessions, meetingDocId)}
+        </div>
+    `;
 
                 container.appendChild(accordion);
             });
