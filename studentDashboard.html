@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Student Profile · Bluesteel Dragons</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav class="nav">
+    <div class="nav-brand">
+        <span class="nav-icon">⬡</span>
+        <span>Bluesteel Dragons</span>
+    </div>
+    <div class="nav-links">
+        <a href="index.html" class="nav-link">Scanner</a>
+        <a href="students.html" class="nav-link active">Directory</a>
+        <a href="admin.html" class="nav-link nav-admin">Admin ↗</a>
+    </div>
+</nav>
+
+<div class="page-wrap">
+
+    <a href="students.html" class="back-btn">← Back to Directory</a>
+
+    <div id="profileHeader" class="profile-header">
+        <div class="profile-avatar" id="profileAvatar">?</div>
+        <div class="profile-info">
+            <h1 id="profileName">Loading…</h1>
+            <p id="profileId">—</p>
+        </div>
+    </div>
+
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-label">Total Hours</div>
+            <div class="stat-value" id="totalHours">0</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Sessions</div>
+            <div class="stat-value" id="totalSessions">0</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Missed</div>
+            <div class="stat-value" id="missedMeetings" style="color:var(--red);">0</div>
+        </div>
+    </div>
+
+    <div>
+        <div class="section-label">Session History</div>
+        <div id="sessionList">
+            <div class="empty">Loading sessions…</div>
+        </div>
+    </div>
+
+</div>
+
+<script type="module" src="studentDashboard.js"></script>
+</body>
+</html>

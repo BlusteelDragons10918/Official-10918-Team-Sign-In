@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Bluesteel Dragons · Sign-In</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="app">
+
+    <!-- NAV -->
+    <nav class="nav">
+        <div class="nav-brand">
+            <span class="nav-icon">⬡</span>
+            <span>Bluesteel Dragons</span>
+        </div>
+        <div class="nav-links">
+            <a href="index.html" class="nav-link active">Scanner</a>
+            <a href="students.html" class="nav-link">Directory</a>
+            <a href="admin.html" class="nav-link nav-admin">Admin ↗</a>
+        </div>
+    </nav>
+
+    <!-- MEETING BAR -->
+    <div class="meeting-bar">
+        <div class="meeting-dot" id="meetingDot"></div>
+        <span id="meetingStatus">No active meeting</span>
+        <div class="meeting-actions">
+            <button id="startMeetingBtn" class="btn-sm primary">Start</button>
+            <button id="endMeetingBtn" class="btn-sm danger">End</button>
+        </div>
+    </div>
+
+    <!-- MAIN -->
+    <div class="main-grid">
+
+        <!-- SCANNER CENTER -->
+        <div class="scanner-card">
+            <div class="scanner-label">SCAN ID</div>
+            <input
+                id="scanInput"
+                type="text"
+                placeholder="Scan card or type ID…"
+                autocomplete="off"
+                spellcheck="false"
+            />
+
+            <div id="scanModeHint" style="font-family:var(--font-mono);font-size:0.75rem;color:var(--text3);letter-spacing:0.05em;text-align:center;min-height:1.4em;transition:color 0.2s;">Scan or type student ID</div>
+
+            <div class="scanner-ring"></div>
+            <div class="scanner-ring ring2"></div>
+        </div>
+
+        <!-- STATUS PANEL -->
+        <div class="status-card">
+            <div class="status-header">Status</div>
+            <div id="message" class="status-message">Ready</div>
+            <div id="liveBox" class="live-box">Waiting for scan…</div>
+        </div>
+
+    </div>
+
+</div>
+
+<!-- CHECKOUT MODAL -->
+<div id="emergencyBox" class="modal-overlay hidden">
+    <div class="modal">
+        <div class="modal-tag">CHECKOUT</div>
+        <h2>Leaving Early?</h2>
+        <p>Scan again to do a normal checkout, or select a reason below for an emergency leave.</p>
+
+        <select id="leaveReason" class="select">
+            <option value="">Select reason…</option>
+            <option value="Illness">Illness</option>
+            <option value="Family">Family Emergency</option>
+            <option value="Other">Other</option>
+        </select>
+
+        <input id="otherReason" class="input" placeholder="If other, explain…" />
+
+        <div class="modal-actions">
+            <button id="confirmEarlyLeaveBtn" class="btn danger">Submit Emergency Leave</button>
+            <button id="cancelEarlyLeaveBtn" class="btn ghost">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>

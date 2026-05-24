@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin Dashboard · Bluesteel Dragons</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- AUTH SCREEN -->
+<div id="adminLogin" class="auth-screen">
+    <div class="auth-box">
+        <div style="color:var(--orange);font-family:var(--font-mono);font-size:0.7rem;letter-spacing:0.2em;">ADMIN ACCESS</div>
+        <h2>Dashboard Login</h2>
+        <p class="sub">Bluesteel Dragons Robotics</p>
+        <div class="form-group">
+            <label>Email</label>
+            <input id="adminEmail" class="input" type="email" placeholder="admin@team.com" autocomplete="username" />
+        </div>
+        <div class="form-group">
+            <label>Password</label>
+            <input id="adminPassword" class="input" type="password" placeholder="••••••••" autocomplete="current-password" />
+        </div>
+        <div id="loginError" style="color:var(--red);font-size:0.82rem;font-family:var(--font-mono);min-height:1.2em;"></div>
+        <button id="loginBtn" class="btn primary" style="margin-top:0.5rem;">Login →</button>
+    </div>
+</div>
+
+<!-- DASHBOARD -->
+<div id="dashboard" class="hidden">
+
+    <nav class="nav">
+        <div class="nav-brand">
+            <span class="nav-icon">⬡</span>
+            <span>Bluesteel Dragons</span>
+        </div>
+        <div class="nav-links">
+            <a href="index.html" class="nav-link">Scanner</a>
+            <a href="students.html" class="nav-link">Directory</a>
+            <a href="admin.html" class="nav-link active nav-admin">Admin</a>
+            <button onclick="logout()" class="btn-sm danger" style="margin-left:0.5rem;">Logout</button>
+        </div>
+    </nav>
+
+    <div class="page-wrap">
+
+        <div class="flex-between">
+            <h1 class="page-title">Admin Dashboard</h1>
+            <button onclick="openAddStudent()" class="btn primary" style="font-size:0.85rem;padding:0.6rem 1.2rem;">+ Add Student</button>
+        </div>
+
+        <!-- STATS BAR -->
+        <div class="stats-bar">
+            <div class="stat-pill">
+                <span class="label">Active Meeting</span>
+                <span class="value" id="activeMeeting" style="font-size:1rem;margin-top:0.3rem;color:var(--cyan);">Loading…</span>
+            </div>
+            <div class="stat-pill">
+                <span class="label">Present Now</span>
+                <span class="value" id="statPresent">—</span>
+            </div>
+            <div class="stat-pill">
+                <span class="label">Sessions Today</span>
+                <span class="value" id="statToday">—</span>
+            </div>
+            <div class="stat-pill">
+                <span class="label">Pending Review</span>
+                <span class="value" id="statPending" style="color:var(--orange);">—</span>
+            </div>
+        </div>
+
+        <!-- TOP ROW: Live Sessions + Leave Requests -->
+        <div class="two-col">
+            <div>
+                <div class="section-label">Live Sessions</div>
+                <div id="sessionList" class="panel-scroll">
+                    <div class="empty">No sessions yet</div>
+                </div>
+            </div>
+            <div>
+                <div class="section-label">🚨 Emergency Leave Requests</div>
+                <div id="leaveRequests" class="panel-scroll">
+                    <div class="empty">No pending requests</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- MEETING HISTORY ACCORDION -->
+        <div>
+            <div class="section-label">Meeting History</div>
+            <div id="meetingHistory">
+                <div class="empty">Loading meetings…</div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<!-- EDIT SESSION MODAL -->
+<div id="editModal" class="modal-overlay hidden">
+    <div class="modal" style="max-width:500px;">
+        <div class="modal-tag">EDIT SESSION</div>
+        <h2 id="editModalTitle">Edit Session</h2>
+
+        <div class="form-group">
+            <label>Student Name</label>
+            <input id="editName" class="input" placeholder="Name" />
+        </div>
+        <div class="form-group">
+            <label>Student ID</label>
+            <input id="editStudentId" class="input" placeholder="Student ID" />
+        </div>
+        <div class="form-group">
+            <label>Check-In Time</label>
+            <input id="editCheckIn" class="input" type="datetime-local" />
+        </div>
+        <div class="form-group">
+            <label>Check-Out Time</label>
+            <input id="editCheckOut" class="input" type="datetime-local" />
+        </div>
+        <div class="form-group">
+            <label>Notes / Leave Reason</label>
+            <input id="editReason" class="input" placeholder="Optional" />
+        </div>
+
+        <div id="editError" style="color:var(--red);font-size:0.82rem;font-family:var(--font-mono);min-height:1.2em;"></div>
+
+        <div class="modal-actions" style="flex-direction:row;gap:0.5rem;margin-top:0.5rem;">
+            <button id="editSaveBtn" class="btn primary" style="flex:1;">Save Changes</button>
+            <button id="editCancelBtn" class="btn ghost">Cancel</button>
+        </div>
+    </div>
+</div>
+
+
+<!-- ADD STUDENT MODAL -->
+<div id="addStudentModal" class="modal-overlay hidden">
+    <div class="modal" style="max-width:460px;">
+        <div class="modal-tag">NEW STUDENT</div>
+        <h2>Add Student</h2>
+
+        <div class="form-group">
+            <label>Full Name</label>
+            <input id="addName" class="input" placeholder="e.g. Jane Smith" />
+        </div>
+        <div class="form-group">
+            <label>School ID</label>
+            <input id="addSchoolId" class="input" placeholder="e.g. 8895572" />
+        </div>
+        <div class="form-group">
+            <label>Card ID <span style="color:var(--text3);font-size:0.75em;font-weight:400;">(barcode / RFID)</span></label>
+            <input id="addCardId" class="input" placeholder="Scan card or enter manually" />
+        </div>
+
+        <div id="addStudentError" style="color:var(--red);font-size:0.82rem;font-family:var(--font-mono);min-height:1.2em;"></div>
+        <div id="addStudentSuccess" style="color:var(--green);font-size:0.82rem;font-family:var(--font-mono);min-height:1.2em;"></div>
+
+        <div class="modal-actions" style="flex-direction:row;gap:0.5rem;margin-top:0.25rem;">
+            <button id="addStudentSaveBtn" class="btn primary" style="flex:1;">Add Student</button>
+            <button id="addStudentCancelBtn" class="btn ghost">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<script type="module" src="admin.js"></script>
+</body>
+</html>
