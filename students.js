@@ -1,4 +1,4 @@
-import { app, db } from "/Official-10918-Team-Sign-In/firebase.js";
+import { app, db } from "./firebase.js";
 import {
     collection,
     getDocs,
