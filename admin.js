@@ -22,7 +22,6 @@ import {
 // Keyed by Firestore user doc ID → { name, displayId }
 let userCache = {};
 
-
 async function buildUserCache() {
     const snap = await getDocs(collection(db, "users"));
     snap.forEach(d => {
@@ -55,8 +54,8 @@ function resolveDisplay(session) {
 
 //  AUTH 
 document.getElementById("loginBtn").onclick = async () => {
-    const email = document.getElementById("adminEmail").value.trim();
-    const pass = document.getElementById("adminPassword").value;
+    const email   = document.getElementById("adminEmail").value.trim();
+    const pass    = document.getElementById("adminPassword").value;
     const errorEl = document.getElementById("loginError");
     errorEl.innerText = "";
     try {
@@ -126,16 +125,16 @@ function listenSessions() {
 
             const { name, id } = resolveDisplay(s);
 
-            const isActive = !s.checkOutTime && s.status === "active";
+            const isActive  = !s.checkOutTime && s.status === "active";
             const isPending = s.status === "pending_admin_review";
-            const isApproved = s.status === "approved";
-            const isRejected = s.status === "rejected";
+            const isApproved= s.status === "approved";
+            const isRejected= s.status === "rejected";
 
-            const tagHTML = isActive ? '<span class="tag active">● Active</span>'
-                : isPending ? '<span class="tag emergency">🚨 Emergency Leave</span>'
-                    : isApproved ? '<span class="tag approved">✓ Approved</span>'
-                        : isRejected ? '<span class="tag rejected">✕ Rejected</span>'
-                            : '<span class="tag done">Completed</span>';
+            const tagHTML = isActive   ? '<span class="tag active">● Active</span>'
+                          : isPending  ? '<span class="tag emergency">🚨 Emergency Leave</span>'
+                          : isApproved ? '<span class="tag approved">✓ Approved</span>'
+                          : isRejected ? '<span class="tag rejected">✕ Rejected</span>'
+                          : '<span class="tag done">Completed</span>';
 
             const duration = s.checkOutTime
                 ? Math.round((s.checkOutTime - s.checkInTime) / 60000) + " min"
@@ -172,7 +171,7 @@ function listenSessions() {
 
 function updateStats(present, today) {
     document.getElementById("statPresent").innerText = present;
-    document.getElementById("statToday").innerText = today;
+    document.getElementById("statToday").innerText   = today;
 }
 
 //  LEAVE REQUESTS 
@@ -267,12 +266,12 @@ async function loadMeetingHistory() {
                 const meetingDocId = d.id;
                 const sessions = sessionsByMeeting[meetingDocId] || [];
 
-                // --- NEW DURATION CALCULATION ---
-                // Uses the meeting's own timestamps instead of summing attendee sessions
-                const endTime = meeting.endTime || Date.now();
-                const durationMs = endTime - meeting.startTime;
-                const durationHrs = (durationMs / 3600000).toFixed(1);
-                // --------------------------------
+                const totalMinutes = sessions.reduce((sum, s) => {
+                    if (s.checkInTime && s.checkOutTime) {
+                        return sum + (s.checkOutTime - s.checkInTime) / 60000;
+                    }
+                    return sum;
+                }, 0);
 
                 const accordion = document.createElement("div");
                 accordion.className = "accordion";
@@ -284,27 +283,27 @@ async function loadMeetingHistory() {
                 const startDate = new Date(meeting.startTime).toLocaleDateString("en-US", {
                     weekday: "short", month: "short", day: "numeric"
                 });
-                const startTimeStr = new Date(meeting.startTime).toLocaleTimeString("en-US", {
+                const startTime = new Date(meeting.startTime).toLocaleTimeString("en-US", {
                     hour: "2-digit", minute: "2-digit"
                 });
 
                 accordion.innerHTML = `
-        <button class="accordion-header" onclick="toggleAccordion('${meetingDocId}')">
-            <div class="accordion-left">
-                <span class="accordion-title">${meeting.meetingLabel || "Meeting"}</span>
-                <span class="accordion-sub">${startDate} · ${startTimeStr}</span>
-            </div>
-            <div class="accordion-right">
-                ${statusDot}
-                <span class="accordion-meta">${sessions.length} attendees</span>
-                <span class="accordion-meta">${durationHrs} hrs total</span>
-                <span class="accordion-chevron" id="chev-${meetingDocId}">▸</span>
-            </div>
-        </button>
-        <div class="accordion-body hidden" id="body-${meetingDocId}">
-            ${renderMeetingBody(sessions, meetingDocId)}
-        </div>
-    `;
+                    <button class="accordion-header" onclick="toggleAccordion('${meetingDocId}')">
+                        <div class="accordion-left">
+                            <span class="accordion-title">${meeting.meetingLabel || "Meeting"}</span>
+                            <span class="accordion-sub">${startDate} · ${startTime}</span>
+                        </div>
+                        <div class="accordion-right">
+                            ${statusDot}
+                            <span class="accordion-meta">${sessions.length} attendees</span>
+                            <span class="accordion-meta">${(totalMinutes / 60).toFixed(1)} hrs total</span>
+                            <span class="accordion-chevron" id="chev-${meetingDocId}">▸</span>
+                        </div>
+                    </button>
+                    <div class="accordion-body hidden" id="body-${meetingDocId}">
+                        ${renderMeetingBody(sessions, meetingDocId)}
+                    </div>
+                `;
 
                 container.appendChild(accordion);
             });
@@ -320,7 +319,7 @@ function renderMeetingBody(sessions, meetingDocId) {
     let rows = sessions.map(s => {
         const { name, id } = resolveDisplay(s);
 
-        const checkInStr = s.checkInTime ? toDatetimeLocal(s.checkInTime) : "";
+        const checkInStr  = s.checkInTime  ? toDatetimeLocal(s.checkInTime)  : "";
         const checkOutStr = s.checkOutTime ? toDatetimeLocal(s.checkOutTime) : "";
 
         const duration = s.checkInTime && s.checkOutTime
@@ -330,12 +329,12 @@ function renderMeetingBody(sessions, meetingDocId) {
         const statusTag = s.status === "pending_admin_review"
             ? '<span class="tag emergency" style="font-size:0.65rem;">Emergency</span>'
             : s.status === "approved"
-                ? '<span class="tag approved"  style="font-size:0.65rem;">Approved</span>'
-                : s.status === "rejected"
-                    ? '<span class="tag rejected"  style="font-size:0.65rem;">Rejected</span>'
-                    : s.checkOutTime
-                        ? '<span class="tag done"      style="font-size:0.65rem;">Done</span>'
-                        : '<span class="tag active"    style="font-size:0.65rem;">Active</span>';
+            ? '<span class="tag approved"  style="font-size:0.65rem;">Approved</span>'
+            : s.status === "rejected"
+            ? '<span class="tag rejected"  style="font-size:0.65rem;">Rejected</span>'
+            : s.checkOutTime
+            ? '<span class="tag done"      style="font-size:0.65rem;">Done</span>'
+            : '<span class="tag active"    style="font-size:0.65rem;">Active</span>';
 
         return `
         <div class="history-row" id="hrow-${s.id}">
@@ -344,8 +343,8 @@ function renderMeetingBody(sessions, meetingDocId) {
                 <div class="hrow-id">ID: ${id}</div>
             </div>
             <div class="hrow-times">
-                <span>In: ${s.checkInTime ? new Date(s.checkInTime).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }) : "—"}</span>
-                <span>Out: ${s.checkOutTime ? new Date(s.checkOutTime).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }) : "—"}</span>
+                <span>In: ${s.checkInTime ? new Date(s.checkInTime).toLocaleTimeString("en-US",{hour:"2-digit",minute:"2-digit"}) : "—"}</span>
+                <span>Out: ${s.checkOutTime ? new Date(s.checkOutTime).toLocaleTimeString("en-US",{hour:"2-digit",minute:"2-digit"}) : "—"}</span>
                 <span>${duration}</span>
             </div>
             <div class="hrow-right">
@@ -386,12 +385,12 @@ window.openEditModal = async (sessionId) => {
     const { name, id } = resolveDisplay(sessionData);
 
     document.getElementById("editModalTitle").innerText = `Edit: ${name}`;
-    document.getElementById("editName").value = sessionData.displayName || name || "";
-    document.getElementById("editStudentId").value = sessionData.displayId || id || "";
-    document.getElementById("editCheckIn").value = sessionData.checkInTime ? toDatetimeLocal(sessionData.checkInTime) : "";
-    document.getElementById("editCheckOut").value = sessionData.checkOutTime ? toDatetimeLocal(sessionData.checkOutTime) : "";
-    document.getElementById("editReason").value = sessionData.earlyLeaveReason || "";
-    document.getElementById("editError").innerText = "";
+    document.getElementById("editName").value       = sessionData.displayName || name || "";
+    document.getElementById("editStudentId").value  = sessionData.displayId   || id  || "";
+    document.getElementById("editCheckIn").value    = sessionData.checkInTime  ? toDatetimeLocal(sessionData.checkInTime)  : "";
+    document.getElementById("editCheckOut").value   = sessionData.checkOutTime ? toDatetimeLocal(sessionData.checkOutTime) : "";
+    document.getElementById("editReason").value     = sessionData.earlyLeaveReason || "";
+    document.getElementById("editError").innerText  = "";
 
     document.getElementById("editModal").classList.remove("hidden");
 };
@@ -404,18 +403,18 @@ document.getElementById("editCancelBtn").onclick = () => {
 document.getElementById("editSaveBtn").onclick = async () => {
     if (!editingSessionId) return;
 
-    const errorEl = document.getElementById("editError");
-    const nameVal = document.getElementById("editName").value.trim();
-    const idVal = document.getElementById("editStudentId").value.trim();
+    const errorEl    = document.getElementById("editError");
+    const nameVal    = document.getElementById("editName").value.trim();
+    const idVal      = document.getElementById("editStudentId").value.trim();
     const checkInVal = document.getElementById("editCheckIn").value;
-    const checkOutVal = document.getElementById("editCheckOut").value;
-    const reasonVal = document.getElementById("editReason").value.trim();
+    const checkOutVal= document.getElementById("editCheckOut").value;
+    const reasonVal  = document.getElementById("editReason").value.trim();
 
     errorEl.innerText = "";
 
     if (!checkInVal) { errorEl.innerText = "Check-in time is required"; return; }
 
-    const checkInTs = new Date(checkInVal).getTime();
+    const checkInTs  = new Date(checkInVal).getTime();
     const checkOutTs = checkOutVal ? new Date(checkOutVal).getTime() : null;
 
     if (checkOutTs && checkOutTs <= checkInTs) {
@@ -425,7 +424,7 @@ document.getElementById("editSaveBtn").onclick = async () => {
 
     const updates = {
         displayName: nameVal,
-        displayId: idVal,
+        displayId:   idVal,
         checkInTime: checkInTs,
         checkOutTime: checkOutTs,
     };
@@ -451,15 +450,15 @@ function toDatetimeLocal(ts) {
     const d = new Date(ts);
     // Format to "YYYY-MM-DDTHH:MM" for datetime-local input
     const pad = n => String(n).padStart(2, "0");
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 //  ADD STUDENT 
 window.openAddStudent = () => {
-    document.getElementById("addName").value = "";
+    document.getElementById("addName").value     = "";
     document.getElementById("addSchoolId").value = "";
-    document.getElementById("addCardId").value = "";
-    document.getElementById("addStudentError").innerText = "";
+    document.getElementById("addCardId").value   = "";
+    document.getElementById("addStudentError").innerText   = "";
     document.getElementById("addStudentSuccess").innerText = "";
     document.getElementById("addStudentModal").classList.remove("hidden");
     setTimeout(() => document.getElementById("addName").focus(), 50);
@@ -470,18 +469,18 @@ document.getElementById("addStudentCancelBtn").onclick = () => {
 };
 
 document.getElementById("addStudentSaveBtn").onclick = async () => {
-    const errorEl = document.getElementById("addStudentError");
+    const errorEl   = document.getElementById("addStudentError");
     const successEl = document.getElementById("addStudentSuccess");
-    errorEl.innerText = "";
+    errorEl.innerText   = "";
     successEl.innerText = "";
 
-    const name = document.getElementById("addName").value.trim();
+    const name     = document.getElementById("addName").value.trim();
     const schoolId = document.getElementById("addSchoolId").value.trim();
-    const cardId = document.getElementById("addCardId").value.trim();
+    const cardId   = document.getElementById("addCardId").value.trim();
 
-    if (!name) { errorEl.innerText = "Name is required"; return; }
-    if (!schoolId) { errorEl.innerText = "School ID is required"; return; }
-    if (!cardId) { errorEl.innerText = "Card ID is required"; return; }
+    if (!name)     { errorEl.innerText = "Name is required";       return; }
+    if (!schoolId) { errorEl.innerText = "School ID is required";  return; }
+    if (!cardId)   { errorEl.innerText = "Card ID is required";    return; }
 
     // Check for duplicate schoolId or cardId
     const existingSnap = await getDocs(collection(db, "users"));
@@ -489,11 +488,11 @@ document.getElementById("addStudentSaveBtn").onclick = async () => {
     existingSnap.forEach(d => {
         const data = d.data();
         if ((data.schoolId || "").toString().trim() === schoolId) dupSchool = true;
-        if ((data.cardId || "").toString().trim() === cardId) dupCard = true;
+        if ((data.cardId   || "").toString().trim() === cardId)   dupCard   = true;
     });
 
     if (dupSchool) { errorEl.innerText = "A student with that School ID already exists"; return; }
-    if (dupCard) { errorEl.innerText = "A student with that Card ID already exists"; return; }
+    if (dupCard)   { errorEl.innerText = "A student with that Card ID already exists";   return; }
 
     try {
         await addDoc(collection(db, "users"), {
@@ -507,9 +506,9 @@ document.getElementById("addStudentSaveBtn").onclick = async () => {
         userCache[name] = { name, displayId: schoolId };
 
         successEl.innerText = `✓ ${name} added successfully`;
-        document.getElementById("addName").value = "";
+        document.getElementById("addName").value     = "";
         document.getElementById("addSchoolId").value = "";
-        document.getElementById("addCardId").value = "";
+        document.getElementById("addCardId").value   = "";
 
         // Auto-close after 1.5s
         setTimeout(() => {
