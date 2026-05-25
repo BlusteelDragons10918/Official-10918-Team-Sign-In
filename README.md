@@ -21,11 +21,11 @@ This is the official sign-in page used for tracking attendance for students who 
 
   ## Admin Controls
   Admin(s) controls include: 
-    - They can add students with their full name, school given id, and physical card id.
-    - They can see current live sessions, and end anyone's session.
-    - They can accept/reject emergency leaves
-    - They can see trends in students who are flagged (repeated rejected emergency leaves, repeated auto-sign outs)
-    - They can see who attended what meeting and edit certain fields within each meeting
+    - They can add students with their full name, school given id, and physical card id. \n
+    - They can see current live sessions, and end anyone's session. \n
+    - They can accept/reject emergency leaves \n
+    - They can see trends in students who are flagged (repeated rejected emergency leaves, repeated auto-sign outs) \n
+    - They can see who attended what meeting and edit certain fields within each meeting \n
 
 This website is hosted on [Vercel]([url](https://official-10918-team-sign-in.vercel.app/index.html)) and all data is stored using Firebase. 
 If you have any suggestions on what to add/bug fixes on the website, please send an email to frc10918@gmail.com
