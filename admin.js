@@ -284,26 +284,26 @@ function renderMeetingBody(sessions) {
     const rows = sessions.map(s => {
         const { name, id } = resolveDisplay(s);
 
-        // Hours: voided if rejected
+        // Automatic sign-outs and rejected leaves never contribute hours.
         let durationStr = "—";
-        if (s.hoursVoided) {
+        if (s.autoSignedOut || s.hoursVoided || s.status === "rejected") {
             durationStr = '<span style="color:var(--red);text-decoration:line-through;">' +
                 (s.checkOutTime ? ((s.checkOutTime - s.checkInTime)/3600000).toFixed(2) + " hrs" : "—") +
-                '</span> <span style="color:var(--red);font-size:0.7rem;">VOIDED</span>';
+                '</span> <span style="color:var(--red);font-size:0.7rem;">0.00 hrs credited · removed from total</span>';
         } else if (s.checkInTime && s.checkOutTime) {
             durationStr = ((s.checkOutTime - s.checkInTime) / 3600000).toFixed(2) + " hrs";
         } else if (!s.checkOutTime) {
             durationStr = "Active";
         }
 
-        const statusTag = s.status === "pending_admin_review"
+        const statusTag = s.autoSignedOut
+            ? '<span class="tag done" style="font-size:0.65rem;">Auto Sign-Out</span>'
+            : s.status === "pending_admin_review"
             ? '<span class="tag emergency" style="font-size:0.65rem;">Emergency</span>'
             : s.status === "approved"
             ? '<span class="tag approved"  style="font-size:0.65rem;">Approved</span>'
             : s.status === "rejected"
             ? '<span class="tag rejected"  style="font-size:0.65rem;">Rejected</span>'
-            : s.autoSignedOut
-            ? '<span class="tag done"      style="font-size:0.65rem;">Auto out</span>'
             : s.checkOutTime
             ? '<span class="tag done"      style="font-size:0.65rem;">Done</span>'
             : '<span class="tag active"    style="font-size:0.65rem;">Active</span>';
@@ -519,13 +519,13 @@ window.exportCSV = async () => {
         const meetingLabel = s.meetingLabel || meetingMap[s.meetingId] || s.meetingId;
         const inTime  = s.checkInTime  ? new Date(s.checkInTime).toLocaleString()  : "";
         const outTime = s.checkOutTime ? new Date(s.checkOutTime).toLocaleString() : "";
-        const durHrs  = (s.checkInTime && s.checkOutTime && !s.hoursVoided)
+        const durHrs  = (s.checkInTime && s.checkOutTime && !s.hoursVoided && !s.autoSignedOut && s.status !== "rejected")
             ? ((s.checkOutTime - s.checkInTime) / 3600000).toFixed(2) : "0";
 
         rows.push([
             name, id, meetingLabel, inTime, outTime, durHrs,
             s.status || "", s.earlyLeave ? "Yes" : "No",
-            s.earlyLeaveReason || "", s.hoursVoided ? "Yes" : "No",
+            s.earlyLeaveReason || "", (s.autoSignedOut || s.hoursVoided || s.status === "rejected") ? "Yes" : "No",
             s.autoSignedOut ? "Yes" : "No", s.note || ""
         ]);
     });

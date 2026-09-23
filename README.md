@@ -14,7 +14,7 @@ This is the official sign-in page used for tracking attendance for students who 
   ## Signing Out
   To sign out, students need to either enter their school given id or scan their id card again. If sign-out is within 30 minutes of sign-in, it     will count as an "emergency leave". Students will be required to put a reason which will then be submitted and then checked over by admin. If     the reason is not valid, minutes for that day will not count towards a students total hours. 
 
-  If a student forgets to sign out, by the time the meeting ends, it will automatically sign the student out. Each time a student forgets to sign   out, it will be noted within their profile. If the student forgets to sign out repeatedly, their profile will be flagged and shown in the admin   page. 
+  If a student forgets to sign out, by the time the meeting ends, it will automatically sign the student out. The hours for that session are removed from the student’s total. Their profile shows “Auto Sign-Out,” the original duration crossed out, and zero credited hours. The directory, admin history, and CSV export also exclude those hours, including older sessions already marked as auto-signed out. Each time a student forgets to sign out, it will be noted within their profile. If the student forgets to sign out repeatedly, their profile will be flagged and shown in the admin page.
 
   ## Student Directory
   Each student has the ability to see how many hours they have and a report of which meetings they attended and missed. They can view other         students as well, but have no editing access to any of this data. 

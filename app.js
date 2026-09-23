@@ -98,8 +98,9 @@ async function endMeeting(endTime, autoCheckoutTime = null) {
         await updateDoc(doc(db, "sessions", d.id), {
             checkOutTime: checkoutTs,
             status: "completed",
-            autoSignedOut: true,   // flag for directory display
-            note: "Auto-signed out when meeting ended"
+            autoSignedOut: true,
+            hoursVoided: true,
+            note: "Auto-signed out when meeting ended — session hours removed from total"
         });
     }
 
@@ -109,7 +110,9 @@ async function endMeeting(endTime, autoCheckoutTime = null) {
 
     document.getElementById("meetingStatus").innerText = "No active meeting";
     setMeetingDot(false);
-    showMessage("Meeting ended — all active sessions closed", "success");
+    showMessage(openSessions.docs.length
+        ? `Meeting ended — ${openSessions.docs.length} student(s) auto-signed out. Their session hours were removed from their totals.`
+        : "Meeting ended — all students had signed out", "success");
 }
 
 // ===================== AUTO MIDNIGHT END =====================

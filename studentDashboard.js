@@ -74,8 +74,8 @@ async function loadStudent() {
         const session = sessionByMeeting[meeting.id];
         if (session) {
             attendedCount++;
-            // Only count hours if not voided (rejected emergency leave)
-            if (session.checkInTime && session.checkOutTime && !session.hoursVoided) {
+            // Exclude automatic sign-outs, including older records without hoursVoided.
+            if (session.checkInTime && session.checkOutTime && !session.hoursVoided && !session.autoSignedOut && session.status !== "rejected") {
                 totalMinutes += (session.checkOutTime - session.checkInTime) / 60000;
             }
         } else {
@@ -133,23 +133,21 @@ async function loadStudent() {
             // Decide row color + label
             let rowClass, iconClass, iconChar, tagClass, tagText, noteHtml = "";
 
-            if (session.status === "rejected" || session.hoursVoided) {
-                // ── RED: rejected emergency leave (hours don't count)
+            if (session.autoSignedOut) {
+                rowClass  = "row-auto";
+                iconClass = "icon-auto";
+                iconChar  = "⚡";
+                tagClass  = "tag-auto";
+                tagText   = "Auto Sign-Out";
+                noteHtml  = `<div class="mrow-note note-yellow">Auto-signed out when meeting ended — session hours removed from total</div>`;
+
+            } else if (session.status === "rejected" || session.hoursVoided) {
                 rowClass  = "row-rejected";
                 iconClass = "icon-rejected";
                 iconChar  = "✕";
                 tagClass  = "tag-rejected";
                 tagText   = "Rejected Leave";
                 noteHtml  = `<div class="mrow-note note-red">Hours not counted — leave rejected</div>`;
-
-            } else if (session.autoSignedOut) {
-                // ── YELLOW: auto-signed out by system
-                rowClass  = "row-auto";
-                iconClass = "icon-auto";
-                iconChar  = "⚡";
-                tagClass  = "tag-auto";
-                tagText   = "Auto Sign-Out";
-                noteHtml  = `<div class="mrow-note note-yellow">Auto-signed out when meeting ended</div>`;
 
             } else if (session.status === "pending_admin_review") {
                 // ── ORANGE: emergency leave pending
@@ -195,7 +193,9 @@ async function loadStudent() {
                     ${noteHtml}
                 </div>
                 <div class="mrow-right">
-                    <span class="mrow-duration">${durationHrs}</span>
+                    <span class="mrow-duration">${session.autoSignedOut || session.hoursVoided || session.status === "rejected"
+                        ? `<s>${durationHrs}</s> · 0.00 hrs credited`
+                        : durationHrs}</span>
                     <span class="row-tag ${tagClass}">${tagText}</span>
                 </div>`;
         }
