@@ -129,6 +129,10 @@
         <div class="form-group"><label>Check-In Time</label><input id="editCheckIn" class="input" type="datetime-local" /></div>
         <div class="form-group"><label>Check-Out Time</label><input id="editCheckOut" class="input" type="datetime-local" /></div>
         <div class="form-group"><label>Notes / Leave Reason</label><input id="editReason" class="input" placeholder="Optional" /></div>
+        <div id="editRestoreHoursGroup" class="form-group hidden">
+            <label><input id="editRestoreHours" type="checkbox" /> Restore removed hours</label>
+            <p class="mrow-note">Include this session in the student's total. Uncheck to remove the hours again. The original sign-out history is kept.</p>
+        </div>
         <div id="editError" style="color:var(--red);font-size:0.82rem;font-family:var(--font-mono);min-height:1.2em;"></div>
         <div class="modal-actions" style="flex-direction:row;gap:0.5rem;margin-top:0.5rem;">
             <button id="editSaveBtn" class="btn primary" style="flex:1;">Save Changes</button>

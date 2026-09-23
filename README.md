@@ -31,3 +31,8 @@ This website is hosted on [Vercel]([url](https://official-10918-team-sign-in.ver
 If you have any suggestions on what to add/bug fixes on the website, please send an email to frc10918@gmail.com
 
 
+
+## Admin corrections
+Admins can use **Clear Flag** to dismiss a specific attendance warning. Dismissals persist after refresh; a new qualifying session can raise the warning again. Clearing a flag does not change attendance or hours.
+
+In meeting history, choose **Edit**, check **Restore removed hours**, and save to include an automatically signed-out or rejected session in the student's total again. The original history remains visible. Uncheck the option to remove the hours again. Directory totals, student profiles, and CSV exports honor this override. These controls appear only on the admin page and require an authenticated admin-page session; database write permissions remain governed by your existing Firebase rules.

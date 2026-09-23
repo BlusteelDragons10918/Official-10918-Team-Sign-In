@@ -1,3 +1,4 @@
+import { areHoursRemoved } from "./sessionHours.js";
 import { db } from "./firebase.js";
 import {
     collection,
@@ -75,7 +76,7 @@ async function loadStudent() {
         if (session) {
             attendedCount++;
             // Exclude automatic sign-outs, including older records without hoursVoided.
-            if (session.checkInTime && session.checkOutTime && !session.hoursVoided && !session.autoSignedOut && session.status !== "rejected") {
+            if (session.checkInTime && session.checkOutTime && !areHoursRemoved(session)) {
                 totalMinutes += (session.checkOutTime - session.checkInTime) / 60000;
             }
         } else {
@@ -139,7 +140,17 @@ async function loadStudent() {
                 iconChar  = "⚡";
                 tagClass  = "tag-auto";
                 tagText   = "Auto Sign-Out";
-                noteHtml  = `<div class="mrow-note note-yellow">Auto-signed out when meeting ended — session hours removed from total</div>`;
+                noteHtml  = `<div class="mrow-note note-yellow">${areHoursRemoved(session)
+                    ? "Auto-signed out when meeting ended — session hours removed from total"
+                    : "Auto-signed out when meeting ended — hours restored by admin and included in total"}</div>`;
+
+            } else if (session.hoursRestored === true) {
+                rowClass  = "row-approved";
+                iconClass = "icon-approved";
+                iconChar  = "✓";
+                tagClass  = "tag-approved";
+                tagText   = "Hours Restored";
+                noteHtml  = `<div class="mrow-note note-blue">Hours restored by admin and included in total</div>`;
 
             } else if (session.status === "rejected" || session.hoursVoided) {
                 rowClass  = "row-rejected";
@@ -193,7 +204,7 @@ async function loadStudent() {
                     ${noteHtml}
                 </div>
                 <div class="mrow-right">
-                    <span class="mrow-duration">${session.autoSignedOut || session.hoursVoided || session.status === "rejected"
+                    <span class="mrow-duration">${areHoursRemoved(session)
                         ? `<s>${durationHrs}</s> · 0.00 hrs credited`
                         : durationHrs}</span>
                     <span class="row-tag ${tagClass}">${tagText}</span>

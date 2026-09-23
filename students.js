@@ -1,3 +1,4 @@
+import { areHoursRemoved } from "./sessionHours.js";
 import { db } from "./firebase.js";
 import {
     collection,
@@ -22,8 +23,8 @@ async function loadStudents() {
         if (!s.userId) return;
         if (!(s.userId in hoursMap)) { hoursMap[s.userId] = 0; sessionCountMap[s.userId] = 0; }
         sessionCountMap[s.userId]++;
-        if (s.autoSignedOut) autoOutCountMap[s.userId] = (autoOutCountMap[s.userId] || 0) + 1;
-        if (s.checkOutTime && s.checkInTime && !s.autoSignedOut && !s.hoursVoided && s.status !== "rejected") {
+        if (s.autoSignedOut && areHoursRemoved(s)) autoOutCountMap[s.userId] = (autoOutCountMap[s.userId] || 0) + 1;
+        if (s.checkOutTime && s.checkInTime && !areHoursRemoved(s)) {
             hoursMap[s.userId] += (s.checkOutTime - s.checkInTime) / 3600000;
         }
     });

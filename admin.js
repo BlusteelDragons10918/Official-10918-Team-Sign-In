@@ -1,3 +1,4 @@
+import { areHoursRemoved } from "./sessionHours.js";
 import { db } from "./firebase.js";
 import {
     collection, query, where, onSnapshot,
@@ -205,6 +206,7 @@ window.approveLeave = async id => {
 window.rejectLeave = async id => {
     await updateDoc(doc(db, "sessions", id), {
         status:      "rejected",
+        hoursRestored: false,
         hoursVoided: true   // ← hours are zeroed out in any hours calculation
     });
     loadFlags();
@@ -286,7 +288,7 @@ function renderMeetingBody(sessions) {
 
         // Automatic sign-outs and rejected leaves never contribute hours.
         let durationStr = "—";
-        if (s.autoSignedOut || s.hoursVoided || s.status === "rejected") {
+        if (areHoursRemoved(s)) {
             durationStr = '<span style="color:var(--red);text-decoration:line-through;">' +
                 (s.checkOutTime ? ((s.checkOutTime - s.checkInTime)/3600000).toFixed(2) + " hrs" : "—") +
                 '</span> <span style="color:var(--red);font-size:0.7rem;">0.00 hrs credited · removed from total</span>';
@@ -308,7 +310,9 @@ function renderMeetingBody(sessions) {
             ? '<span class="tag done"      style="font-size:0.65rem;">Done</span>'
             : '<span class="tag active"    style="font-size:0.65rem;">Active</span>';
 
-        const noteHtml = s.note
+        const noteHtml = s.hoursRestored === true
+            ? '<div class="mrow-note note-blue">Hours restored by admin — included in total</div>'
+            : s.note
             ? `<div style="font-family:var(--font-mono);font-size:0.68rem;color:var(--text3);margin-top:2px;">${s.note}</div>` : "";
 
         return `
@@ -410,7 +414,10 @@ document.getElementById("assignCardSaveBtn").onclick = async () => {
 async function loadFlags() {
     const container = document.getElementById("flagsList");
     container.innerHTML = "";
-    const flags = [];
+    let flags = [];
+    const usersSnap = await getDocs(collection(db, "users"));
+    const dismissals = {};
+    usersSnap.forEach(d => { dismissals[d.id] = d.data().flagDismissals || {}; });
 
     const sessionsSnap = await getDocs(collection(db, "sessions"));
 
@@ -433,6 +440,7 @@ async function loadFlags() {
                 type: "error",
                 icon: "🚫",
                 title: `${name} — Repeated rejected leave requests`,
+                userId, key: "rejected", sessionIds: rejectedLeaves.map(s => s.id),
                 detail: `${rejectedLeaves.length} rejected emergency leaves on record`
             });
         }
@@ -449,6 +457,7 @@ async function loadFlags() {
                 type: "warn",
                 icon: "⚠️",
                 title: `${name} — Consecutive rejected leaves`,
+                userId, key: "rejected", sessionIds: rejectedLeaves.map(s => s.id),
                 detail: `${maxConsec} rejected leaves in a row`
             });
         }
@@ -463,6 +472,7 @@ async function loadFlags() {
                 type: "warn",
                 icon: "⏱",
                 title: `${name} — Repeatedly short sessions`,
+                userId, key: "short", sessionIds: shortSessions.map(s => s.id),
                 detail: `${shortSessions.length} sessions under 15 minutes`
             });
         }
@@ -474,11 +484,16 @@ async function loadFlags() {
                 type: "info",
                 icon: "🔔",
                 title: `${name} — Frequently auto-signed out`,
+                userId, key: "auto", sessionIds: autoOuts.map(s => s.id),
                 detail: `${autoOuts.length} times auto-signed out at meeting end`
             });
         }
     }
 
+    flags = flags.filter(f => {
+        const cleared = dismissals[f.userId]?.[f.key] || [];
+        return !f.sessionIds.every(id => cleared.includes(id));
+    });
     document.getElementById("flagsCount").innerText = flags.length;
 
     if (flags.length === 0) {
@@ -496,6 +511,23 @@ async function loadFlags() {
                 <div class="flag-detail">${f.detail}</div>
             </div>
         `;
+        const clearButton = document.createElement("button");
+        clearButton.className = "btn-edit";
+        clearButton.textContent = "Clear Flag";
+        clearButton.onclick = async () => {
+            if (!auth.currentUser) return;
+            clearButton.disabled = true;
+            try {
+                await updateDoc(doc(db, "users", f.userId), {
+                    [`flagDismissals.${f.key}`]: f.sessionIds
+                });
+                await loadFlags();
+            } catch (err) {
+                clearButton.disabled = false;
+                alert("Could not clear flag: " + err.message);
+            }
+        };
+        el.appendChild(clearButton);
         container.appendChild(el);
     });
 }
@@ -519,13 +551,13 @@ window.exportCSV = async () => {
         const meetingLabel = s.meetingLabel || meetingMap[s.meetingId] || s.meetingId;
         const inTime  = s.checkInTime  ? new Date(s.checkInTime).toLocaleString()  : "";
         const outTime = s.checkOutTime ? new Date(s.checkOutTime).toLocaleString() : "";
-        const durHrs  = (s.checkInTime && s.checkOutTime && !s.hoursVoided && !s.autoSignedOut && s.status !== "rejected")
+        const durHrs  = (s.checkInTime && s.checkOutTime && !areHoursRemoved(s))
             ? ((s.checkOutTime - s.checkInTime) / 3600000).toFixed(2) : "0";
 
         rows.push([
             name, id, meetingLabel, inTime, outTime, durHrs,
             s.status || "", s.earlyLeave ? "Yes" : "No",
-            s.earlyLeaveReason || "", (s.autoSignedOut || s.hoursVoided || s.status === "rejected") ? "Yes" : "No",
+            s.earlyLeaveReason || "", (areHoursRemoved(s)) ? "Yes" : "No",
             s.autoSignedOut ? "Yes" : "No", s.note || ""
         ]);
     });
@@ -558,6 +590,9 @@ window.openEditModal = async (sessionId) => {
     document.getElementById("editCheckIn").value   = sd.checkInTime  ? toDatetimeLocal(sd.checkInTime)  : "";
     document.getElementById("editCheckOut").value  = sd.checkOutTime ? toDatetimeLocal(sd.checkOutTime) : "";
     document.getElementById("editReason").value    = sd.earlyLeaveReason || "";
+    document.getElementById("editRestoreHoursGroup").classList.toggle("hidden",
+        !areHoursRemoved(sd) && sd.hoursRestored !== true);
+    document.getElementById("editRestoreHours").checked = sd.hoursRestored === true;
     document.getElementById("editError").innerText = "";
     document.getElementById("editModal").classList.remove("hidden");
 };
@@ -568,7 +603,7 @@ document.getElementById("editCancelBtn").onclick = () => {
 };
 
 document.getElementById("editSaveBtn").onclick = async () => {
-    if (!editingSessionId) return;
+    if (!editingSessionId || !auth.currentUser) return;
     const errorEl     = document.getElementById("editError");
     const checkInVal  = document.getElementById("editCheckIn").value;
     const checkOutVal = document.getElementById("editCheckOut").value;
@@ -583,6 +618,14 @@ document.getElementById("editSaveBtn").onclick = async () => {
         checkInTime:  checkInTs,
         checkOutTime: checkOutTs,
     };
+    if (!document.getElementById("editRestoreHoursGroup").classList.contains("hidden")) {
+        const restoreHours = document.getElementById("editRestoreHours").checked;
+        if (restoreHours && !checkOutTs) {
+            errorEl.innerText = "A check-out time is required to restore hours";
+            return;
+        }
+        updates.hoursRestored = restoreHours;
+    }
     const reasonVal = document.getElementById("editReason").value.trim();
     if (reasonVal) { updates.earlyLeaveReason = reasonVal; updates.earlyLeave = true; }
     try {
