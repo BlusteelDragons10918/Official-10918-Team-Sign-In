@@ -1,3 +1,4 @@
+import { attendanceStart } from "./studentEnrollment.js";
 import { areHoursRemoved } from "./sessionHours.js";
 
 export const HEADERS = ["Name", "School ID Number", "Total Meetings Attended", "Total Meetings Missed", "Dates of Meetings Missed", "Total Auto-Sign Outs", "Emergency Leaves Requested", "Emergency Leaves Approved", "Reasons for Emergency Leaves", "Emergency Leaves Rejected", "Average Hours per Meeting", "Attendance Rating (1–10)"];
@@ -29,7 +30,7 @@ export function buildAttendanceReport(users, meetings, sessions, now = Date.now(
     sessions.forEach(s => { if (!byUser.has(s.userId)) byUser.set(s.userId, []); byUser.get(s.userId).push(s); });
     const warnings = [];
     const rows = [...users].sort((a,b) => (a.name || "").localeCompare(b.name || "")).map(user => {
-        const joined = timestamp(user.createdAt);
+        const joined = attendanceStart(user.createdAt, meetings, byUser.get(user.id) || []);
         const eligible = finished.filter(m => joined === null || day(timestamp(m.startTime)) >= day(joined));
         const eligibleIds = new Set(eligible.map(m => m.id));
         const records = (byUser.get(user.id) || []).filter(s => eligibleIds.has(s.meetingId) && timestamp(s.checkInTime) !== null);
@@ -53,7 +54,7 @@ export function buildAttendanceReport(users, meetings, sessions, now = Date.now(
         }
         const attended = attendedIds.size;
         let rating = "N/A";
-        if (joined === null) warnings.push([user.name || user.id, "Creation date missing: missed meetings and rating are unavailable. Recorded attendance is still shown."]);
+        if (joined === null) warnings.push([user.name || user.id, "Creation date and first attendance missing: missed meetings and rating are unavailable."]);
         else if (eligible.length) {
             const durationRate = durationCount ? durationTotal / durationCount : 1;
             const quality = Math.max(0, 1 - .20*Math.min(1,autoOuts/Math.max(1,attended))
@@ -63,7 +64,7 @@ export function buildAttendanceReport(users, meetings, sessions, now = Date.now(
         }
         const schoolId = user.schoolId ?? user.identifiers?.find(i => /school/i.test(i.type || ""))?.value ?? "";
         return [user.name || "Unknown", String(schoolId), attended, joined === null ? "N/A" : missed.length,
-            joined === null ? "Creation date missing" : missed.map(m => dateText(timestamp(m.startTime))).join("; "),
+            joined === null ? "Attendance start unknown" : missed.map(m => dateText(timestamp(m.startTime))).join("; "),
             autoOuts, leaves.length, approved, reasons, rejected, attended ? Math.round(hours/attended*100)/100 : 0, rating];
     });
     return {rows, warnings};
@@ -106,12 +107,12 @@ export function createAttendanceWorkbook(ExcelJS, report) {
     notes.columns = [{header:"Topic",width:30},{header:"Explanation",width:110}];
     notes.addRows([
         ["Scope", "One row per current student. Only ended meetings are included; ongoing or reopened meetings are excluded from all metrics until ended again. Dates use the exporting browser's local calendar."],
-        ["Enrollment", "Eligible meetings start on or after the day the student was added (createdAt). Meetings earlier on that same day count. Missing creation dates give N/A missed counts and ratings; no date is guessed."],
+        ["Enrollment", "Eligible meetings start on the first attended meeting day on or after database enrollment. Earlier meetings do not count as missed. Until first attendance, the creation day is used. With no creation date, first recorded attendance is used; if neither exists, missed counts and ratings are N/A."],
         ["Attendance", "Each eligible meeting with a student session counts once, including sessions with removed hours. Multiple visits do not increase meetings attended."],
         ["Hours", "Average = credited hours / meetings attended. Removed hours count as zero; admin-restored hours count normally. Overlapping session intervals are merged. No attended meetings gives 0 hours."],
         ["Events", "Auto sign-outs and emergency leaves count session events in eligible ended meetings. Restoring hours or clearing a flag does not erase events. Reopening a meeting reverses its accidental auto sign-outs."],
         ["Reasons", "All emergency leave reasons are listed together with dates and decision status, separated by semicolons. Requested includes approved, rejected and pending requests."],
-        ["Rating", "Score = 1 + 9 × attendance rate × quality, rounded to one decimal (1–10). No eligible meetings or missing creation date = N/A. No attendance = 1."],
+        ["Rating", "Score = 1 + 9 × attendance rate × quality, rounded to one decimal (1–10). No eligible meetings or unknown attendance start = N/A. No attendance = 1."],
         ["Attendance rate", "Meetings attended / eligible meetings since enrollment."],
         ["Quality", "1 − 0.20 × auto rate − 0.20 × rejected rate − 0.025 × approved rate − 0.05 × pending rate − 0.15 × (1 − duration rate). Each event rate is events / meetings attended, capped at 1; quality is floored at 0."],
         ["Duration rate", "Average across attended meetings of credited hours / full meeting duration, capped at 1 per meeting. Nonpositive meeting durations are ignored for this factor."],

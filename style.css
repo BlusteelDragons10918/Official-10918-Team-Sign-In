@@ -1120,3 +1120,16 @@ body {
     line-height: 1.5;
     margin: 0.35rem 0;
 }
+
+/* Meetings before a student's attendance start are context, not absences. */
+.meeting-row.row-before-joined {
+    background: rgba(148,163,184,0.05);
+    border-color: rgba(148,163,184,0.22);
+}
+.row-before-joined .mrow-title, .row-before-joined .mrow-note { color: #aeb8c8; }
+.icon-before-joined { background: rgba(148,163,184,0.12); color: #aeb8c8; }
+.tag-before-joined {
+    background: rgba(148,163,184,0.1);
+    color: #bac3d1;
+    border-color: rgba(148,163,184,0.25);
+}

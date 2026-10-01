@@ -1,4 +1,4 @@
-import { enrollmentTimestamp, isOnOrAfterEnrollment } from "./studentEnrollment.js";
+import { isOnOrAfterEnrollment, attendanceStart } from "./studentEnrollment.js";
 import { areHoursRemoved } from "./sessionHours.js";
 import { db } from "./firebase.js";
 import {
@@ -67,26 +67,20 @@ async function loadStudent() {
         }
     });
 
-    const joinedAt = enrollmentTimestamp(user?.createdAt);
-    // Never turn meetings before enrollment into absences. For legacy records
-    // without a creation date, show recorded sessions only, without guessing.
-    const visibleMeetings = allMeetings.filter(meeting => joinedAt === null
+    const cutoff = attendanceStart(user?.createdAt, allMeetings, Object.values(sessionByMeeting));
+    const eligibleMeetings = allMeetings.filter(meeting => cutoff === null
         ? Boolean(sessionByMeeting[meeting.id])
-        : isOnOrAfterEnrollment(meeting.startTime, joinedAt));
-    const firstMeeting = visibleMeetings.find(meeting => sessionByMeeting[meeting.id]);
+        : isOnOrAfterEnrollment(meeting.startTime, cutoff));
+    const firstMeeting = eligibleMeetings.find(meeting => sessionByMeeting[meeting.id]);
     document.getElementById("firstMeeting").innerText = firstMeeting
         ? `🎉 First club meeting: ${formatDate(firstMeeting.startTime)}`
         : "First club meeting: Not attended yet";
-    document.getElementById("enrollmentNote").innerText = joinedAt === null
-        ? "Date added is not recorded. Missed meetings are unavailable; recorded attendance is shown below."
-        : `Added ${formatDate(joinedAt)} · Missed meetings count only from this day onward.`;
-
     // ── 4. Compute stats ─────────────────────────────────────────
     let totalMinutes  = 0;
     let attendedCount = 0;
     let missedCount   = 0;
 
-    visibleMeetings.forEach(meeting => {
+    eligibleMeetings.forEach(meeting => {
         const session = sessionByMeeting[meeting.id];
         if (session) {
             attendedCount++;
@@ -101,22 +95,36 @@ async function loadStudent() {
 
     document.getElementById("totalHours").innerText     = (totalMinutes / 60).toFixed(1);
     document.getElementById("totalSessions").innerText  = attendedCount;
-    document.getElementById("missedMeetings").innerText = joinedAt === null ? "N/A" : missedCount;
+    document.getElementById("missedMeetings").innerText = cutoff === null ? "N/A" : missedCount;
 
     // ── 5. Render every meeting row (newest first) ───────────────
     const sessionList = document.getElementById("sessionList");
     sessionList.innerHTML = "";
 
-    if (visibleMeetings.length === 0) {
-        sessionList.innerHTML = '<div class="empty">No meetings to show since this student joined</div>';
+    if (allMeetings.length === 0) {
+        sessionList.innerHTML = '<div class="empty">No meetings have been held yet</div>';
         return;
     }
 
-    [...visibleMeetings].reverse().forEach(meeting => {
+    [...allMeetings].reverse().forEach(meeting => {
         const session  = sessionByMeeting[meeting.id];
         const row      = document.createElement("div");
 
-        if (!session) {
+        const beforeJoined = cutoff !== null && !isOnOrAfterEnrollment(meeting.startTime, cutoff);
+        const unknownEnrollment = cutoff === null && !session;
+        if (beforeJoined || unknownEnrollment) {
+            row.className = "meeting-row row-before-joined";
+            row.innerHTML = `
+                <div class="mrow-icon icon-before-joined">—</div>
+                <div class="mrow-body">
+                    <div class="mrow-title">${meeting.meetingLabel || "Meeting"}</div>
+                    <div class="mrow-meta">${formatDate(meeting.startTime)}</div>
+                    <div class="mrow-note">${beforeJoined
+                        ? "This meeting occurred before you joined — not counted as missed."
+                        : "Enrollment date unknown — not counted as missed."}</div>
+                </div>
+                <div class="mrow-right"><span class="row-tag tag-before-joined">${beforeJoined ? "Before you joined" : "Not counted"}</span></div>`;
+        } else if (!session) {
             // ── NO SESSION: Missed or In Progress ───────────────
             row.className = `meeting-row ${meeting.active ? "row-inprogress" : "row-missed"}`;
             row.innerHTML = `
