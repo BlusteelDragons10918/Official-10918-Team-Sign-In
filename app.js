@@ -9,7 +9,8 @@ import {
     where,
     updateDoc,
     doc,
-    orderBy
+    orderBy,
+    writeBatch
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 // Wait for the existing admin login to be restored when the scanner page opens.
@@ -29,6 +30,7 @@ let currentMeetingStart  = null; // timestamp — used for early-leave 30-min wi
 let pendingCheckoutSessionId = null;
 let pendingCheckoutUserId    = null;
 
+let isChangingMeeting = false;
 let isProcessingScan = false;
 let scanTimeout      = null;
 
@@ -52,6 +54,20 @@ function updateLiveBox(html) {
 }
 
 // ===================== MEETING =====================
+function localMeetingDate(timestamp) {
+    const date = new Date(timestamp);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function useMeeting(id, meeting) {
+    currentMeetingDocId = id;
+    currentMeetingLabel = meeting.meetingLabel;
+    currentMeetingStart = meeting.startTime;
+    document.getElementById("meetingStatus").innerText = meeting.meetingLabel;
+    setMeetingDot(true);
+    scheduleMidnightAutoEnd();
+}
+
 document.getElementById("startMeetingBtn").onclick = async () => {
     try {
         await adminAuthReady;
@@ -63,33 +79,64 @@ document.getElementById("startMeetingBtn").onclick = async () => {
         showMessage("Please sign in as admin. Use the Admin link, then return here to start a meeting.", "warn");
         return;
     }
+    if (isChangingMeeting) return;
     if (currentMeetingDocId) { showMessage("Meeting already active", "warn"); return; }
 
-    const today         = new Date().toISOString().split("T")[0];
-    const snapshot      = await getDocs(collection(db, "meetings"));
-    const meetingNumber = snapshot.size + 1;
-    const meetingLabel  = `Meeting ${meetingNumber} (${today})`;
-    const startTime     = Date.now();
+    isChangingMeeting = true;
+    try {
+        const today = localMeetingDate(Date.now());
+        const snapshot = await getDocs(collection(db, "meetings"));
+        const meetings = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        const active = meetings.find(m => m.active);
+        if (active) {
+            useMeeting(active.id, active);
+            showMessage("Meeting already active — " + active.meetingLabel, "warn");
+            return;
+        }
 
-    const ref = await addDoc(collection(db, "meetings"), {
-        startTime,
-        endTime: null,
-        active: true,
-        meetingNumber,
-        meetingLabel,
-        date: today
-    });
+        // Use the original start timestamp, including for legacy UTC date labels.
+        const previous = meetings
+            .filter(m => localMeetingDate(m.startTime) === today)
+            .sort((a, b) => b.startTime - a.startTime)[0];
+        if (previous) {
+            const sessions = await getDocs(query(collection(db, "sessions"), where("meetingId", "==", previous.id)));
+            const resume = sessions.docs.filter(d => {
+                const session = d.data();
+                return session.autoSignedOut && session.status === "completed" &&
+                    (session.autoSignOutMeetingEnd ?? session.checkOutTime) === previous.endTime;
+            });
+            // Keep the meeting and its sessions consistent if a write fails.
+            if (resume.length > 499) throw new Error("Too many sessions to reopen together. Contact an administrator.");
+            const batch = writeBatch(db);
+            batch.update(doc(db, "meetings", previous.id), { active: true, endTime: null });
+            resume.forEach(d => batch.update(doc(db, "sessions", d.id), {
+                checkOutTime: null,
+                status: "active",
+                autoSignedOut: false,
+                hoursVoided: false,
+                hoursRestored: false,
+                autoSignOutMeetingEnd: null,
+                note: d.data().noteBeforeAutoSignOut || ""
+            }));
+            await batch.commit();
+            useMeeting(previous.id, previous);
+            showMessage(`Reopened ${previous.meetingLabel} — ${resume.length} student(s) checked back in. Accidental auto sign-outs and removed hours were undone.`, "success");
+            return;
+        }
 
-    currentMeetingDocId = ref.id;
-    currentMeetingLabel = meetingLabel;
-    currentMeetingStart = startTime;
-
-    document.getElementById("meetingStatus").innerText = meetingLabel;
-    setMeetingDot(true);
-    showMessage("Started " + meetingLabel, "success");
-
-    // Schedule auto-end at midnight (or 8 PM if past midnight check)
-    scheduleMidnightAutoEnd();
+        const meetingNumber = Math.max(snapshot.size, ...meetings.map(m => Number(m.meetingNumber) || 0)) + 1;
+        const meeting = {
+            startTime: Date.now(), endTime: null, active: true,
+            meetingNumber, meetingLabel: `Meeting ${meetingNumber} (${today})`, date: today
+        };
+        const ref = await addDoc(collection(db, "meetings"), meeting);
+        useMeeting(ref.id, meeting);
+        showMessage("Started " + meeting.meetingLabel, "success");
+    } catch (err) {
+        showMessage("Could not start meeting: " + err.message, "error");
+    } finally {
+        isChangingMeeting = false;
+    }
 };
 
 document.getElementById("endMeetingBtn").onclick = async () => {
@@ -97,44 +144,48 @@ document.getElementById("endMeetingBtn").onclick = async () => {
     await endMeeting(Date.now());
 };
 
-// Shared end-meeting logic — also used by auto-end
-// autoCheckoutTime: if set, sign out all still-active sessions at this timestamp
+// End and reopen write the meeting and affected sessions atomically.
 async function endMeeting(endTime, autoCheckoutTime = null) {
-    const meetId = currentMeetingDocId;
-
-    await updateDoc(doc(db, "meetings", meetId), {
-        endTime,
-        active: false
-    });
-
-    // Auto sign out everyone still checked in.
-    // Query on status only (no composite index needed), filter meetingId client-side.
-    const allActiveSessions = await getDocs(
-        query(collection(db, "sessions"), where("status", "==", "active"))
-    );
-    const openSessions = { docs: allActiveSessions.docs.filter(d => d.data().meetingId === meetId) };
-
-    const checkoutTs = autoCheckoutTime || endTime;
-
-    for (const d of openSessions.docs) {
-        await updateDoc(doc(db, "sessions", d.id), {
-            checkOutTime: checkoutTs,
+    if (isChangingMeeting || !currentMeetingDocId) return;
+    isChangingMeeting = true;
+    try {
+        const meetId = currentMeetingDocId;
+        const allActiveSessions = await getDocs(
+            query(collection(db, "sessions"), where("status", "==", "active"))
+        );
+        const openSessions = allActiveSessions.docs.filter(d => d.data().meetingId === meetId);
+        if (openSessions.length > 499) throw new Error("Too many sessions to close together. Contact an administrator.");
+        const batch = writeBatch(db);
+        batch.update(doc(db, "meetings", meetId), { endTime, active: false });
+        const checkoutTs = autoCheckoutTime || endTime;
+        openSessions.forEach(d => batch.update(doc(db, "sessions", d.id), {
+            checkOutTime: Math.max(checkoutTs, d.data().checkInTime),
             status: "completed",
             autoSignedOut: true,
             hoursVoided: true,
+            hoursRestored: false,
+            autoSignOutMeetingEnd: endTime,
+            noteBeforeAutoSignOut: d.data().note || "",
             note: "Auto-signed out when meeting ended — session hours removed from total"
-        });
+        }));
+        await batch.commit();
+        currentMeetingDocId = null;
+        currentMeetingLabel = null;
+        currentMeetingStart = null;
+        pendingCheckoutSessionId = null;
+        pendingCheckoutUserId = null;
+        document.getElementById("emergencyBox").classList.add("hidden");
+        clearTimeout(midnightTimer);
+        document.getElementById("meetingStatus").innerText = "No active meeting";
+        setMeetingDot(false);
+        showMessage(openSessions.length
+            ? `Meeting ended — ${openSessions.length} student(s) auto-signed out. Their session hours were removed from their totals.`
+            : "Meeting ended — all students had signed out", "success");
+    } catch (err) {
+        showMessage("Could not end meeting: " + err.message, "error");
+    } finally {
+        isChangingMeeting = false;
     }
-
-    currentMeetingDocId = null;
-    currentMeetingLabel = null;
-    currentMeetingStart = null;
-
-    document.getElementById("meetingStatus").innerText = "No active meeting";
-    setMeetingDot(false);
-    showMessage(openSessions.docs.length
-        ? `Meeting ended — ${openSessions.docs.length} student(s) auto-signed out. Their session hours were removed from their totals.`
-        : "Meeting ended — all students had signed out", "success");
 }
 
 // ===================== AUTO MIDNIGHT END =====================
@@ -206,6 +257,7 @@ async function submitId() {
     keystrokeTimes = [];
     updateModeHint("unknown");
     if (!id) return;
+    if (isChangingMeeting) { showMessage("Meeting is updating — please scan again in a moment", "warn"); return; }
     if (!currentMeetingDocId) { showMessage("No active meeting — start one first", "error"); return; }
     await handleScan(id);
 }
