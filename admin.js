@@ -1,3 +1,4 @@
+import { buildAttendanceReport, downloadAttendanceWorkbook } from "./attendanceExport.js";
 import { areHoursRemoved } from "./sessionHours.js";
 import { db } from "./firebase.js";
 import {
@@ -533,43 +534,29 @@ async function loadFlags() {
 }
 
 // ============================================================
-//  EXPORT TO CSV
+//  EXPORT ATTENDANCE SUMMARY
 // ============================================================
-window.exportCSV = async () => {
-    const sessionsSnap = await getDocs(
-        query(collection(db, "sessions"), orderBy("checkInTime", "desc"))
-    );
-    const meetingsSnap = await getDocs(collection(db, "meetings"));
-    const meetingMap = {};
-    meetingsSnap.forEach(d => { meetingMap[d.id] = d.data().meetingLabel || d.id; });
-
-    const rows = [["Name", "School ID", "Meeting", "Check In", "Check Out", "Duration (hrs)", "Status", "Early Leave", "Reason", "Hours Voided", "Auto Signed Out", "Note"]];
-
-    sessionsSnap.forEach(d => {
-        const s = d.data();
-        const { name, id } = resolveDisplay(s);
-        const meetingLabel = s.meetingLabel || meetingMap[s.meetingId] || s.meetingId;
-        const inTime  = s.checkInTime  ? new Date(s.checkInTime).toLocaleString()  : "";
-        const outTime = s.checkOutTime ? new Date(s.checkOutTime).toLocaleString() : "";
-        const durHrs  = (s.checkInTime && s.checkOutTime && !areHoursRemoved(s))
-            ? ((s.checkOutTime - s.checkInTime) / 3600000).toFixed(2) : "0";
-
-        rows.push([
-            name, id, meetingLabel, inTime, outTime, durHrs,
-            s.status || "", s.earlyLeave ? "Yes" : "No",
-            s.earlyLeaveReason || "", (areHoursRemoved(s)) ? "Yes" : "No",
-            s.autoSignedOut ? "Yes" : "No", s.note || ""
+window.exportExcel = async () => {
+    if (!auth.currentUser) { alert("Please sign in as admin to export attendance."); return; }
+    const button = document.getElementById("exportAttendanceBtn");
+    if (button.disabled) return;
+    button.disabled = true;
+    button.textContent = "Preparing Excel…";
+    try {
+        const [usersSnap, meetingsSnap, sessionsSnap] = await Promise.all([
+            getDocs(collection(db, "users")),
+            getDocs(collection(db, "meetings")),
+            getDocs(collection(db, "sessions"))
         ]);
-    });
-
-    const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement("a");
-    a.href     = url;
-    a.download = `robotics-attendance-${new Date().toISOString().split("T")[0]}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+        const records = snap => snap.docs.map(d => ({...d.data(), id:d.id}));
+        const report = buildAttendanceReport(records(usersSnap), records(meetingsSnap), records(sessionsSnap));
+        await downloadAttendanceWorkbook(report);
+    } catch (error) {
+        alert("Could not export attendance: " + error.message);
+    } finally {
+        button.disabled = false;
+        button.textContent = "⬇ Export Excel";
+    }
 };
 
 // ============================================================

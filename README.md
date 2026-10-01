@@ -41,3 +41,6 @@ The Start button uses the same Firebase sign-in as the existing admin page (this
 
 ## Reopening a meeting
 Starting again on the same local calendar day reopens the most recent meeting for that day with its original number, label, and start time. Students automatically signed out by its latest ending resume their original sessions with no auto-sign-out penalty; their original check-in times are kept, so a later normal sign-out includes the whole interval. Manual sign-outs and emergency leave decisions are unchanged. Ending the reopened meeting still applies the normal automatic sign-out policy to anyone who has not signed out. Starting on a new day creates a new meeting.
+
+## Excel attendance summary
+**Export Excel** downloads an `.xlsx` workbook with one row per student and a Report Guide explaining the metrics and rating. Missed meetings begin on the local calendar day of the student's `createdAt` database creation date. Older records without that field show N/A for missed meetings and ratings rather than assuming an enrollment date. Only ended meetings are included. The report preserves school IDs as text, includes semicolon-separated missed dates and leave reasons, and honors removed/restored hours. The optional ExcelJS 4.4.0 browser library loads from jsDelivr only when exporting; a failed download displays an error and allows retry.
