@@ -1,4 +1,6 @@
-import { db } from "./firebase.js";
+import { db, auth } from "./firebase.js";
+import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
 import {
     collection,
     addDoc,
@@ -9,6 +11,16 @@ import {
     doc,
     orderBy
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+// Wait for the existing admin login to be restored when the scanner page opens.
+const adminAuthReady = new Promise((resolve, reject) => {
+    const unsubscribe = onAuthStateChanged(auth, () => {
+        unsubscribe();
+        resolve();
+    }, reject);
+});
+// The Start handler reports initialization failures without blocking public pages.
+adminAuthReady.catch(() => {});
 
 let currentMeetingDocId  = null;
 let currentMeetingLabel  = null;
@@ -41,6 +53,16 @@ function updateLiveBox(html) {
 
 // ===================== MEETING =====================
 document.getElementById("startMeetingBtn").onclick = async () => {
+    try {
+        await adminAuthReady;
+    } catch {
+        showMessage("Unable to check admin sign-in. Please refresh and try again.", "error");
+        return;
+    }
+    if (!auth.currentUser) {
+        showMessage("Please sign in as admin. Use the Admin link, then return here to start a meeting.", "warn");
+        return;
+    }
     if (currentMeetingDocId) { showMessage("Meeting already active", "warn"); return; }
 
     const today         = new Date().toISOString().split("T")[0];

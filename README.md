@@ -6,7 +6,7 @@ This is the official sign-in page used for tracking attendance for students who 
   Admin(s) will need to add students into the database. This is either through their school given id (eg. 8895572) and/or the number given          through scanning the students physical id card. A school given id is required. 
 
   ## Starting & Ending a Meeting
-  To start a meeting, there is a button in the top right corner of the scan page. To end a meeting, there is a button in the top right corner of    the scan page. 
+  To start a meeting, first sign in using the Admin link, then return to the scan page and click Start in the top right corner. Signed-out visitors see “Please sign in as admin” and cannot start a meeting through the website. Public pages and student ID scanning remain accessible without an admin login. To end a meeting, there is a button in the top right corner of    the scan page.
 
   ## Signing In
   To sign in, students need to either type their school given id (eg. 8895572) or scan their physical card. If typing, students will need to        press enter, but if scanning, students do not need to do anything further. 
@@ -36,3 +36,5 @@ If you have any suggestions on what to add/bug fixes on the website, please send
 Admins can use **Clear Flag** to dismiss a specific attendance warning. Dismissals persist after refresh; a new qualifying session can raise the warning again. Clearing a flag does not change attendance or hours.
 
 In meeting history, choose **Edit**, check **Restore removed hours**, and save to include an automatically signed-out or rejected session in the student's total again. The original history remains visible. Uncheck the option to remove the hours again. Directory totals, student profiles, and CSV exports honor this override. These controls appear only on the admin page and require an authenticated admin-page session; database write permissions remain governed by your existing Firebase rules.
+
+The Start button uses the same Firebase sign-in as the existing admin page (this project does not define separate account roles). This is a website check; database-level restrictions depend on the Firebase rules configured for the project, which are not included in this repository.
