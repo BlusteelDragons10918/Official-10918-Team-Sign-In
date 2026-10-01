@@ -1,3 +1,4 @@
+import { enrollmentTimestamp, isOnOrAfterEnrollment } from "./studentEnrollment.js";
 import { areHoursRemoved } from "./sessionHours.js";
 import { db } from "./firebase.js";
 import {
@@ -17,10 +18,18 @@ async function loadStudents() {
     const hoursMap = {};
     const sessionCountMap = {};
     const autoOutCountMap = {};
+    const enrollmentMap = {};
+    const firstMeetingMap = {};
+    usersSnap.forEach(d => { enrollmentMap[d.id] = d.data().createdAt; });
 
     sessionsSnap.forEach(d => {
         const s = d.data();
         if (!s.userId) return;
+        const checkIn = enrollmentTimestamp(s.checkInTime);
+        const joined = enrollmentTimestamp(enrollmentMap[s.userId]);
+        if (checkIn !== null && (joined === null || isOnOrAfterEnrollment(checkIn, joined))) {
+            firstMeetingMap[s.userId] = Math.min(firstMeetingMap[s.userId] ?? Infinity, checkIn);
+        }
         if (!(s.userId in hoursMap)) { hoursMap[s.userId] = 0; sessionCountMap[s.userId] = 0; }
         sessionCountMap[s.userId]++;
         if (s.autoSignedOut && areHoursRemoved(s)) autoOutCountMap[s.userId] = (autoOutCountMap[s.userId] || 0) + 1;
@@ -40,7 +49,8 @@ async function loadStudents() {
             displayId: data.schoolId || data.cardId || data.identifiers?.[0]?.value || fid,
             hours: hoursMap[fid] || 0,
             sessions: sessionCountMap[fid] || 0,
-            autoOuts: autoOutCountMap[fid] || 0
+            autoOuts: autoOutCountMap[fid] || 0,
+            firstMeeting: firstMeetingMap[fid] ?? null
         });
     });
 
@@ -79,6 +89,9 @@ function renderStudents(students) {
                     <div class="student-id">ID: ${s.displayId}</div>
                 </div>
             </div>
+            <div class="first-meeting-label">${s.firstMeeting !== null
+                ? `🎉 First meeting: ${new Date(s.firstMeeting).toLocaleDateString("en-US", {month:"short",day:"numeric",year:"numeric"})}`
+                : "First meeting: Not attended yet"}</div>
             <div class="student-hours">${s.hours.toFixed(1)} hrs · ${s.sessions} sessions</div>
             ${s.autoOuts ? `<div class="mrow-note note-yellow">${s.autoOuts} auto sign-out(s) · Those session hours removed from total</div>` : ""}
         `;

@@ -1,3 +1,4 @@
+import { enrollmentTimestamp, isOnOrAfterEnrollment } from "./studentEnrollment.js";
 import { areHoursRemoved } from "./sessionHours.js";
 import { db } from "./firebase.js";
 import {
@@ -66,12 +67,26 @@ async function loadStudent() {
         }
     });
 
+    const joinedAt = enrollmentTimestamp(user?.createdAt);
+    // Never turn meetings before enrollment into absences. For legacy records
+    // without a creation date, show recorded sessions only, without guessing.
+    const visibleMeetings = allMeetings.filter(meeting => joinedAt === null
+        ? Boolean(sessionByMeeting[meeting.id])
+        : isOnOrAfterEnrollment(meeting.startTime, joinedAt));
+    const firstMeeting = visibleMeetings.find(meeting => sessionByMeeting[meeting.id]);
+    document.getElementById("firstMeeting").innerText = firstMeeting
+        ? `🎉 First club meeting: ${formatDate(firstMeeting.startTime)}`
+        : "First club meeting: Not attended yet";
+    document.getElementById("enrollmentNote").innerText = joinedAt === null
+        ? "Date added is not recorded. Missed meetings are unavailable; recorded attendance is shown below."
+        : `Added ${formatDate(joinedAt)} · Missed meetings count only from this day onward.`;
+
     // ── 4. Compute stats ─────────────────────────────────────────
     let totalMinutes  = 0;
     let attendedCount = 0;
     let missedCount   = 0;
 
-    allMeetings.forEach(meeting => {
+    visibleMeetings.forEach(meeting => {
         const session = sessionByMeeting[meeting.id];
         if (session) {
             attendedCount++;
@@ -80,24 +95,24 @@ async function loadStudent() {
                 totalMinutes += (session.checkOutTime - session.checkInTime) / 60000;
             }
         } else {
-            if (!meeting.active) missedCount++;
+            if (meeting.active === false && meeting.endTime && meeting.endTime <= Date.now()) missedCount++;
         }
     });
 
     document.getElementById("totalHours").innerText     = (totalMinutes / 60).toFixed(1);
     document.getElementById("totalSessions").innerText  = attendedCount;
-    document.getElementById("missedMeetings").innerText = missedCount;
+    document.getElementById("missedMeetings").innerText = joinedAt === null ? "N/A" : missedCount;
 
     // ── 5. Render every meeting row (newest first) ───────────────
     const sessionList = document.getElementById("sessionList");
     sessionList.innerHTML = "";
 
-    if (allMeetings.length === 0) {
-        sessionList.innerHTML = '<div class="empty">No meetings have been held yet</div>';
+    if (visibleMeetings.length === 0) {
+        sessionList.innerHTML = '<div class="empty">No meetings to show since this student joined</div>';
         return;
     }
 
-    [...allMeetings].reverse().forEach(meeting => {
+    [...visibleMeetings].reverse().forEach(meeting => {
         const session  = sessionByMeeting[meeting.id];
         const row      = document.createElement("div");
 
@@ -195,12 +210,15 @@ async function loadStudent() {
                 tagText   = "Attended";
             }
 
-            row.className = `meeting-row ${rowClass}`;
+            const isFirstMeeting = meeting.id === firstMeeting?.id;
+            row.className = `meeting-row ${rowClass}${isFirstMeeting ? " row-first-meeting" : ""}`;
+            if (isFirstMeeting) { iconClass = "icon-first-meeting"; iconChar = "🎉"; }
             row.innerHTML = `
                 <div class="mrow-icon ${iconClass}">${iconChar}</div>
                 <div class="mrow-body">
                     <div class="mrow-title">${meeting.meetingLabel || "Meeting"}</div>
                     <div class="mrow-meta">${formatDate(meeting.startTime)} · In ${inTime} · Out ${outTime}</div>
+                    ${isFirstMeeting ? '<div class="first-meeting-label">First club meeting · Welcome to the team!</div>' : ""}
                     ${noteHtml}
                 </div>
                 <div class="mrow-right">

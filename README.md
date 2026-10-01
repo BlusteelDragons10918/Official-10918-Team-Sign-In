@@ -44,3 +44,6 @@ Starting again on the same local calendar day reopens the most recent meeting fo
 
 ## Excel attendance summary
 **Export Excel** downloads an `.xlsx` workbook with one row per student and a Report Guide explaining the metrics and rating. Missed meetings begin on the local calendar day of the student's `createdAt` database creation date. Older records without that field show N/A for missed meetings and ratings rather than assuming an enrollment date. Only ended meetings are included. The report preserves school IDs as text, includes semicolon-separated missed dates and leave reasons, and honors removed/restored hours. The optional ExcelJS 4.4.0 browser library loads from jsDelivr only when exporting; a failed download displays an error and allows retry.
+
+## First meeting in the directory
+Student cards show their first recorded attendance date. Profiles highlight the first attended meeting on or after enrollment in purple with a celebration icon, while retaining leave/sign-out status labels. Meetings before the day the student was added (`createdAt`) are omitted from profile history and missed totals. Older records without a creation date show recorded sessions and N/A missed meetings rather than guessed absences.

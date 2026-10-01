@@ -1104,3 +1104,19 @@ body {
     .accordion-meta { display: none; }
     .mrow-right  { flex-wrap: wrap; justify-content: flex-end; }
 }
+
+/* Celebrate a student's first attended meeting without hiding its session status. */
+.meeting-row.row-first-meeting {
+    background: linear-gradient(110deg, rgba(168,85,247,0.16), rgba(99,102,241,0.07));
+    border-color: rgba(192,132,252,0.6);
+    border-left: 4px solid #c084fc;
+}
+.meeting-row.row-first-meeting:hover { border-color: #d8b4fe; }
+.icon-first-meeting { background: rgba(168,85,247,0.22); font-size: 1.05rem; }
+.first-meeting-label, .profile-info p.first-meeting-label {
+    color: #d8b4fe;
+    font-weight: 600;
+    font-size: 0.78rem;
+    line-height: 1.5;
+    margin: 0.35rem 0;
+}
