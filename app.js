@@ -53,7 +53,7 @@ function updateLiveBox(html) {
         `<div style="color:var(--text2);font-size:0.85rem;">${html}</div>`;
 }
 
-// ===================== MEETING =====================
+// ===================== MEETING ====================
 function localMeetingDate(timestamp) {
     const date = new Date(timestamp);
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
