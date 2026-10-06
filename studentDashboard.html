@@ -26,6 +26,7 @@
     <a href="students.html" class="back-btn">← Back to Directory</a>
 
     <div id="profileHeader" class="profile-header">
+        <button id="editStudentBtn" class="btn-edit profile-edit-btn hidden" type="button" aria-label="Edit student" title="Edit student">✎</button>
         <div class="profile-avatar" id="profileAvatar">?</div>
         <div class="profile-info">
             <h1 id="profileName">Loading…</h1>
@@ -56,6 +57,24 @@
         </div>
     </div>
 
+</div>
+
+<div id="editStudentModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="editStudentTitle">
+    <div class="modal" style="max-width:460px;">
+        <div class="modal-tag">EDIT STUDENT</div>
+        <h2 id="editStudentTitle">Edit Student</h2>
+        <div class="form-group"><label for="editStudentName">Full Name <span style="color:var(--red);">*</span></label><input id="editStudentName" class="input" placeholder="e.g. Jane Smith" /></div>
+        <div class="form-group"><label for="editStudentSchoolId">School ID <span style="color:var(--red);">*</span></label><input id="editStudentSchoolId" class="input" placeholder="e.g. 8895572" /></div>
+        <div class="form-group">
+            <label for="editStudentCardId">Card ID <span style="color:var(--text3);font-size:0.75em;font-weight:400;">(optional — can be assigned later)</span></label>
+            <input id="editStudentCardId" class="input" placeholder="Scan card or leave blank" />
+        </div>
+        <div id="editStudentError" role="alert" style="color:var(--red);font-size:0.82rem;font-family:var(--font-mono);min-height:1.2em;"></div>
+        <div class="modal-actions" style="flex-direction:row;gap:0.5rem;margin-top:0.25rem;">
+            <button id="saveStudentBtn" class="btn primary" style="flex:1;" type="button">Save Changes</button>
+            <button id="cancelStudentBtn" class="btn ghost" type="button">Cancel</button>
+        </div>
+    </div>
 </div>
 
 <script type="module" src="studentDashboard.js"></script>

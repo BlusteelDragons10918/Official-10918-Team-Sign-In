@@ -50,3 +50,6 @@ Student cards show their first recorded attendance date. Profiles highlight the 
 
 ## Meetings before first attendance
 Profiles retain earlier meetings in gray as **Before you joined**, excluded from missed totals. Once a student attends, the first attended meeting on or after database enrollment is the attendance cutoff for profiles and Excel exports. Until then, the database creation day is used. If creation date is missing, first recorded attendance supplies the cutoff; if both are unknown, missed counts remain unavailable. The first attended meeting keeps its purple celebration highlight.
+
+## Editing a student profile
+Signed-in admins can open a student from the directory and click the pencil in the profile's upper-right corner. The existing name, school ID and optional card ID are prefilled in an Add Student-style dialog. Saving updates that student without replacing attendance history or enrollment date; duplicate IDs used by other students are rejected. First-meeting dates appear only on individual profiles, not directory cards. Profile editing uses the same Firebase authentication as the admin page; database authorization remains controlled by the project's Firebase rules.

@@ -1,3 +1,4 @@
+import { setupStudentProfileEditor } from "./studentProfileEditor.js";
 import { isOnOrAfterEnrollment, attendanceStart } from "./studentEnrollment.js";
 import { areHoursRemoved } from "./sessionHours.js";
 import { db } from "./firebase.js";
@@ -248,4 +249,7 @@ function formatDate(ts) {
     });
 }
 
-loadStudent();
+if (userId) {
+    setupStudentProfileEditor(userId, loadStudent);
+    loadStudent();
+}

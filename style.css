@@ -1133,3 +1133,8 @@ body {
     color: #bac3d1;
     border-color: rgba(148,163,184,0.25);
 }
+
+/* Admin edit control in the profile's upper-right corner. */
+.profile-header { position: relative; padding-right: 4rem; }
+.profile-edit-btn { position: absolute; top: 1rem; right: 1rem; font-size: 1.25rem; }
+.profile-edit-btn.hidden { display: none; }
