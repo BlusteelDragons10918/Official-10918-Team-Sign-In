@@ -16,14 +16,12 @@ async function loadStudents() {
     // Build hours map keyed by firestoreId
     const hoursMap = {};
     const sessionCountMap = {};
-    const autoOutCountMap = {};
 
     sessionsSnap.forEach(d => {
         const s = d.data();
         if (!s.userId) return;
         if (!(s.userId in hoursMap)) { hoursMap[s.userId] = 0; sessionCountMap[s.userId] = 0; }
         sessionCountMap[s.userId]++;
-        if (s.autoSignedOut && areHoursRemoved(s)) autoOutCountMap[s.userId] = (autoOutCountMap[s.userId] || 0) + 1;
         if (s.checkOutTime && s.checkInTime && !areHoursRemoved(s)) {
             hoursMap[s.userId] += (s.checkOutTime - s.checkInTime) / 3600000;
         }
@@ -39,8 +37,7 @@ async function loadStudents() {
             name: data.name || "Unknown",
             displayId: data.schoolId || data.cardId || data.identifiers?.[0]?.value || fid,
             hours: hoursMap[fid] || 0,
-            sessions: sessionCountMap[fid] || 0,
-            autoOuts: autoOutCountMap[fid] || 0
+            sessions: sessionCountMap[fid] || 0
         });
     });
 
@@ -80,7 +77,6 @@ function renderStudents(students) {
                 </div>
             </div>
             <div class="student-hours">${s.hours.toFixed(1)} hrs · ${s.sessions} sessions</div>
-            ${s.autoOuts ? `<div class="mrow-note note-yellow">${s.autoOuts} auto sign-out(s) · Those session hours removed from total</div>` : ""}
         `;
 
         container.appendChild(card);
