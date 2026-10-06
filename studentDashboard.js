@@ -1,5 +1,5 @@
 import { setupStudentProfileEditor } from "./studentProfileEditor.js";
-import { isOnOrAfterEnrollment, attendanceStart } from "./studentEnrollment.js";
+import { enrollmentTimestamp, isOnOrAfterEnrollment, attendanceStart } from "./studentEnrollment.js";
 import { areHoursRemoved } from "./sessionHours.js";
 import { db } from "./firebase.js";
 import {
@@ -93,6 +93,22 @@ async function loadStudent() {
             if (meeting.active === false && meeting.endTime && meeting.endTime <= Date.now()) missedCount++;
         }
     });
+
+    let totalAutoSignOuts = 0;
+    let autoSignOutHoursLost = 0;
+    const eligibleMeetingIds = new Set(eligibleMeetings.map(meeting => meeting.id));
+    sessionsSnap.forEach(d => {
+        const session = d.data();
+        if (!session.autoSignedOut || !eligibleMeetingIds.has(session.meetingId)) return;
+        totalAutoSignOuts++;
+        const checkIn = enrollmentTimestamp(session.checkInTime);
+        const checkOut = enrollmentTimestamp(session.checkOutTime);
+        if (areHoursRemoved(session) && checkIn !== null && checkOut !== null) {
+            autoSignOutHoursLost += Math.max(0, checkOut - checkIn) / 3600000;
+        }
+    });
+    document.getElementById("totalAutoSignOuts").innerText = totalAutoSignOuts;
+    document.getElementById("autoSignOutHoursLost").innerText = autoSignOutHoursLost.toFixed(2);
 
     document.getElementById("totalHours").innerText     = (totalMinutes / 60).toFixed(1);
     document.getElementById("totalSessions").innerText  = attendedCount;
