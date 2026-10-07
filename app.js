@@ -140,6 +140,16 @@ document.getElementById("startMeetingBtn").onclick = async () => {
 };
 
 document.getElementById("endMeetingBtn").onclick = async () => {
+    try {
+        await adminAuthReady;
+    } catch {
+        showMessage("Unable to check admin sign-in. Please refresh and try again.", "error");
+        return;
+    }
+    if (!auth.currentUser) {
+        showMessage("Please sign in as admin. Use the Admin link, then return here to end a meeting.", "warn");
+        return;
+    }
     if (!currentMeetingDocId) { showMessage("No active meeting", "error"); return; }
     await endMeeting(Date.now());
 };
